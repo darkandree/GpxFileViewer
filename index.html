@@ -1,0 +1,3167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RSBSA Parcel — GPX Plotter</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#12161d;
+    --ink-2:#1a2029;
+    --ink-3:#232b37;
+    --line:#2d3644;
+    --paper:#eef0e6;
+    --text:#dfe3ea;
+    --text-strong:#f4f1ea;
+    --text-dim:#7c8798;
+    --brass:#818cf8;
+    --brass-bright:#a5b4fc;
+    --moss:#5c8a6a;
+    --moss-bright:#8fc79e;
+    --moss-text:#c9e6d1;
+    --danger:#c0604a;
+    --map-bg:#0d1014;
+    --sheen:rgba(255,255,255,0.015);
+    --hover-fill:rgba(255,255,255,0.06);
+    --attribution-bg:rgba(18,22,29,0.75);
+    --shadow:0 6px 18px rgba(0,0,0,0.35);
+  }
+  html[data-theme="light"]{
+    --ink:#f4f2ea;
+    --ink-2:#ffffff;
+    --ink-3:#ffffff;
+    --line:#dcd8c9;
+    --paper:#eef0e6;
+    --text:#2b3038;
+    --text-strong:#1a1d24;
+    --text-dim:#767b87;
+    --brass:#4f46e5;
+    --brass-bright:#4338ca;
+    --moss:#3f7a52;
+    --moss-bright:#2e6b41;
+    --moss-text:#1f4a2c;
+    --danger:#a8452f;
+    --map-bg:#e4e1d6;
+    --sheen:rgba(0,0,0,0.02);
+    --hover-fill:rgba(0,0,0,0.05);
+    --attribution-bg:rgba(255,255,255,0.85);
+    --shadow:0 6px 18px rgba(0,0,0,0.1);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    font-family:'Roboto', sans-serif;
+    background:var(--ink);
+    color:var(--text);
+    overflow:hidden;
+    transition:background .2s ease, color .2s ease;
+  }
+  #app{
+    display:flex;
+    height:100vh;
+    width:100vw;
+  }
+
+  /* ---------- Sidebar ---------- */
+  #sidebar{
+    width:360px;
+    min-width:360px;
+    background:
+      radial-gradient(circle at 20% 10%, rgba(129,140,248,0.06), transparent 40%),
+      var(--ink-2);
+    border-right:1px solid var(--line);
+    display:flex;
+    flex-direction:column;
+    position:relative;
+    z-index:5;
+  }
+  #sidebar::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    opacity:0.5;
+    background-image:
+      repeating-radial-gradient(circle at 85% 0%, transparent 0, transparent 38px, var(--sheen) 39px, transparent 40px);
+  }
+
+  header{
+    padding:22px 22px 16px 22px;
+    border-bottom:1px solid var(--line);
+    position:relative;
+  }
+  .header-top{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:10px;
+  }
+  .eyebrow{
+    font-family:'Roboto Mono', monospace;
+    font-weight:700;
+    font-size:15px;
+    letter-spacing:0.03em;
+    color:var(--brass);
+    text-transform:uppercase;
+    line-height:1.4;
+  }
+  .theme-toggle{
+    flex-shrink:0;
+    width:32px;
+    height:32px;
+    border-radius:7px;
+    border:1px solid var(--line);
+    background:var(--ink-3);
+    color:var(--text-dim);
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    transition:all .15s ease;
+  }
+  .theme-toggle:hover{ color:var(--brass-bright); border-color:var(--brass); }
+  .subtitle{
+    font-size:12.5px;
+    color:var(--text-dim);
+    margin-top:8px;
+    line-height:1.5;
+  }
+
+  /* Drop zone */
+  #dropzone{
+    margin:18px 22px 14px 22px;
+    border:1.5px dashed var(--line);
+    border-radius:8px;
+    padding:22px 16px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .15s ease, background .15s ease;
+    position:relative;
+  }
+  #dropzone:hover, #dropzone.dragover{
+    border-color:var(--brass);
+    background:rgba(129,140,248,0.06);
+  }
+  #dropzone svg{ opacity:0.75; margin-bottom:8px; }
+  #dropzone .dz-title{
+    font-size:13px;
+    font-weight:500;
+    color:var(--text);
+  }
+  #dropzone .dz-sub{
+    font-size:11px;
+    color:var(--text-dim);
+    margin-top:4px;
+    font-family:'Roboto Mono', monospace;
+  }
+  #fileInput{ display:none; }
+
+  /* Track list */
+  #trackListWrap{
+    flex:1;
+    overflow-y:auto;
+    padding:4px 14px 14px 14px;
+  }
+  #trackListWrap::-webkit-scrollbar{ width:8px; }
+  #trackListWrap::-webkit-scrollbar-thumb{ background:var(--line); border-radius:4px; }
+
+  .search-wrap{
+    position:relative;
+    margin:6px 8px 0 8px;
+  }
+  .search-icon{
+    position:absolute;
+    left:10px;
+    top:50%;
+    transform:translateY(-50%);
+    color:var(--text-dim);
+    pointer-events:none;
+  }
+  .search-input{
+    width:100%;
+    background:var(--ink-3);
+    border:1px solid var(--line);
+    color:var(--text);
+    font-family:'Roboto', sans-serif;
+    font-size:12.5px;
+    padding:8px 30px 8px 32px;
+    border-radius:6px;
+    outline:none;
+    transition:border-color .15s ease;
+  }
+  .search-input:focus{ border-color:var(--brass); }
+  .search-input::placeholder{ color:var(--text-dim); }
+  .search-clear{
+    position:absolute;
+    right:6px;
+    top:50%;
+    transform:translateY(-50%);
+    background:none;
+    border:none;
+    color:var(--text-dim);
+    font-size:18px;
+    line-height:1;
+    cursor:pointer;
+    padding:4px 6px;
+  }
+  .search-clear:hover{ color:var(--text); }
+
+  .list-heading{
+    font-family:'Roboto Mono', monospace;
+    font-size:10px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    padding:12px 8px 8px 8px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .remove-all-btn{
+    background:none;
+    border:1px solid var(--line);
+    color:var(--danger);
+    font-family:'Roboto Mono', monospace;
+    font-size:9px;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    padding:4px 8px;
+    border-radius:4px;
+    cursor:pointer;
+    transition:all .15s ease;
+  }
+  .remove-all-btn:hover{ background:rgba(192,96,74,0.1); border-color:var(--danger); }
+  .remove-all-btn:disabled{ opacity:0.35; cursor:default; pointer-events:none; }
+
+  .empty-state{
+    padding:30px 16px;
+    text-align:center;
+    color:var(--text-dim);
+    font-size:12.5px;
+    line-height:1.6;
+  }
+
+  .track-card{
+    background:var(--ink-3);
+    border:1px solid var(--line);
+    border-left:3px solid var(--track-color, var(--brass));
+    border-radius:6px;
+    padding:12px 12px 10px 12px;
+    margin-bottom:10px;
+    cursor:pointer;
+    box-shadow:var(--shadow);
+    transition:transform .1s ease, border-color .15s ease, box-shadow .15s ease;
+  }
+  .track-card:hover{ transform:translateX(2px); }
+  .track-card.dimmed{ opacity:0.4; }
+
+  .track-card-top{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:8px;
+  }
+  .track-name{
+    font-size:13px;
+    font-weight:600;
+    color:var(--text-strong);
+    word-break:break-word;
+    line-height:1.35;
+  }
+  .track-filename{
+    font-family:'Roboto Mono', monospace;
+    font-size:10px;
+    color:var(--text-dim);
+    word-break:break-word;
+    margin-top:2px;
+  }
+  .track-date{
+    font-family:'Roboto Mono', monospace;
+    font-size:10.5px;
+    color:var(--brass);
+    margin-top:3px;
+  }
+  .track-actions{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    flex-shrink:0;
+  }
+  .icon-btn{
+    background:none;
+    border:none;
+    color:var(--text-dim);
+    cursor:pointer;
+    padding:3px;
+    border-radius:4px;
+    display:flex;
+    line-height:0;
+  }
+  .icon-btn:hover{ color:var(--text); background:var(--hover-fill); }
+  .icon-btn.remove:hover{ color:var(--danger); }
+
+  .track-stats{
+    display:flex;
+    gap:14px;
+    margin-top:8px;
+    font-family:'Roboto Mono', monospace;
+    font-size:11px;
+    color:var(--text-dim);
+  }
+  .track-stats b{ color:var(--text); font-weight:600; }
+
+  .track-area{
+    margin-top:6px;
+    font-family:'Roboto Mono', monospace;
+    font-size:11px;
+    color:var(--moss);
+    background:rgba(92,138,106,0.1);
+    border:1px solid rgba(92,138,106,0.25);
+    border-radius:4px;
+    padding:5px 8px;
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+  }
+  .track-area svg{ flex-shrink:0; }
+  .track-area b{ color:var(--moss-bright); font-weight:600; }
+
+  .anomaly-badge{
+    margin-top:6px;
+    font-family:'Roboto Mono', monospace;
+    font-size:10.5px;
+    border-radius:4px;
+    padding:5px 8px;
+    display:inline-block;
+  }
+  .anomaly-badge.clean{
+    color:var(--moss-bright);
+    background:rgba(92,138,106,0.1);
+    border:1px solid rgba(92,138,106,0.25);
+  }
+  .anomaly-badge.warn{
+    color:#e0a15c;
+    background:rgba(224,161,92,0.1);
+    border:1px solid rgba(224,161,92,0.35);
+  }
+  .anomaly-badge.bad{
+    color:var(--danger);
+    background:rgba(192,96,74,0.1);
+    border:1px solid rgba(192,96,74,0.35);
+  }
+
+  .overlap-badge{
+    margin-top:6px;
+    font-family:'Roboto Mono', monospace;
+    font-size:10.5px;
+    border-radius:4px;
+    padding:5px 8px;
+    display:inline-block;
+  }
+  .overlap-badge.bad{
+    color:var(--danger);
+    background:rgba(192,96,74,0.14);
+    border:1px solid rgba(192,96,74,0.4);
+  }
+
+
+  .sparkline{ margin-top:8px; display:block; }
+
+  /* Base layer switcher */
+  #layerSwitch{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:6px;
+    padding:14px 22px;
+    border-top:1px solid var(--line);
+  }
+  .layer-btn{
+    background:var(--ink-3);
+    border:1px solid var(--line);
+    color:var(--text-dim);
+    font-family:'Roboto Mono', monospace;
+    font-size:9.5px;
+    letter-spacing:0.02em;
+    padding:9px 4px;
+    border-radius:5px;
+    cursor:pointer;
+    text-transform:uppercase;
+    transition:all .15s ease;
+    white-space:nowrap;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:5px;
+  }
+  .layer-btn svg{ flex-shrink:0; }
+  .layer-btn.active{
+    background:rgba(129,140,248,0.14);
+    border-color:var(--brass);
+    color:var(--brass-bright);
+  }
+  .layer-btn:hover{ color:var(--text); }
+
+  /* ---------- Map ---------- */
+  #mapWrap{ position:relative; flex:1; height:100vh; }
+  #map{ position:absolute; inset:0; background:var(--map-bg); }
+
+  /* ---------- Summary panel ---------- */
+  #summaryPanel{
+    position:absolute;
+    top:14px;
+    right:14px;
+    z-index:1000;
+    width:340px;
+    background:var(--ink-2);
+    border:1px solid var(--line);
+    border-radius:8px;
+    box-shadow:var(--shadow);
+    overflow:hidden;
+    font-family:'Roboto', sans-serif;
+  }
+  .summary-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:10px 12px;
+    border-bottom:1px solid var(--line);
+    cursor:pointer;
+    user-select:none;
+  }
+  .summary-title{
+    font-family:'Roboto Mono', monospace;
+    font-size:11px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--brass);
+  }
+  .summary-collapse{
+    background:none;
+    border:1px solid var(--line);
+    color:var(--text-dim);
+    width:20px;
+    height:20px;
+    border-radius:4px;
+    line-height:1;
+    font-size:14px;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .summary-collapse:hover{ color:var(--text); border-color:var(--brass); }
+  .summary-body{ padding:12px; }
+  #summaryPanel.collapsed .summary-body{ display:none; }
+
+  .summary-tabs{
+    display:flex;
+    gap:6px;
+    margin-bottom:12px;
+  }
+  .summary-tab{
+    position:relative;
+    flex:1;
+    background:var(--ink-3);
+    border:1px solid var(--line);
+    color:var(--text-dim);
+    font-family:'Roboto Mono', monospace;
+    font-size:10.5px;
+    letter-spacing:0.03em;
+    padding:6px 4px;
+    border-radius:5px;
+    cursor:pointer;
+    transition:all .15s ease;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:4px;
+  }
+  .summary-tab.active{
+    background:rgba(129,140,248,0.14);
+    border-color:var(--brass);
+    color:var(--brass-bright);
+  }
+  .summary-tab:hover{ color:var(--text); }
+
+  .tab-badge{
+    position:absolute;
+    top:-7px;
+    right:-7px;
+    background:#e0393f;
+    color:#fff;
+    font-family:'Roboto', sans-serif;
+    font-weight:700;
+    font-size:10px;
+    line-height:1;
+    min-width:17px;
+    height:17px;
+    border-radius:9px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:0 4px;
+    box-shadow:0 0 0 2px var(--ink-2);
+  }
+  .tab-badge.green{
+    background:#2fae63;
+    color:#fff;
+    box-shadow:0 0 0 2px var(--ink-2), 0 0 0 1px rgba(47,174,99,0.5);
+  }
+
+  .flagged-rank-header{
+    font-family:'Roboto Mono', monospace;
+    font-size:9.5px;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    margin-top:14px;
+    padding-top:12px;
+    border-top:1px solid var(--line);
+    margin-bottom:8px;
+  }
+  .flagged-rank-list{
+    max-height:280px;
+    overflow-y:auto;
+  }
+  .flagged-rank-item{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:8px 8px;
+    border-radius:6px;
+    cursor:pointer;
+    border:1px solid transparent;
+  }
+  .flagged-rank-item:hover{ background:var(--hover-fill); border-color:var(--line); }
+  .flagged-rank-num{
+    font-family:'Roboto Mono', monospace;
+    font-size:10px;
+    color:var(--text-dim);
+    width:16px;
+    flex-shrink:0;
+  }
+  .flagged-rank-info{ min-width:0; flex:1; }
+  .flagged-rank-name{
+    font-size:12px;
+    font-weight:600;
+    color:var(--text-strong);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .flagged-rank-sub{
+    font-family:'Roboto Mono', monospace;
+    font-size:9.5px;
+    color:var(--text-dim);
+    margin-top:2px;
+  }
+  .flagged-rank-pct{
+    font-family:'Roboto Mono', monospace;
+    font-weight:700;
+    font-size:13px;
+    flex-shrink:0;
+    min-width:44px;
+    text-align:right;
+  }
+  .flagged-rank-pct.clean{ color:var(--moss-bright); }
+  .flagged-rank-pct.warn{ color:#e0a15c; }
+  .flagged-rank-pct.bad{ color:var(--danger); }
+  .summary-empty{
+    font-size:11.5px;
+    color:var(--text-dim);
+    line-height:1.5;
+    padding:6px 2px;
+  }
+
+  .summary-footnote{
+    margin-top:14px;
+    padding-top:12px;
+    border-top:1px solid var(--line);
+    font-size:11px;
+    color:var(--text-dim);
+    line-height:1.6;
+  }
+  .summary-footnote-title{
+    font-family:'Roboto Mono', monospace;
+    font-size:10px;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    color:var(--danger);
+    margin-bottom:5px;
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .footnote-count-badge{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-width:17px;
+    height:17px;
+    padding:0 5px;
+    border-radius:9px;
+    background:#e0393f;
+    color:#fff;
+    font-family:'Roboto', sans-serif;
+    font-weight:700;
+    font-size:10px;
+    line-height:1;
+  }
+  .summary-footnote-list{
+    list-style:none;
+    padding:0;
+    margin:0;
+  }
+  .summary-footnote-list li{
+    padding:2px 0;
+    word-break:break-word;
+  }
+
+  .summary-stat-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+  }
+  .summary-stat{
+    background:var(--ink-3);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:9px 10px;
+  }
+  .summary-stat-label{
+    font-family:'Roboto Mono', monospace;
+    font-size:9px;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    margin-bottom:4px;
+  }
+  .summary-stat-value{
+    font-family:'Roboto Mono', monospace;
+    font-weight:600;
+    font-size:16px;
+    color:var(--text-strong);
+  }
+  .summary-stat-value span{
+    font-size:11px;
+    color:var(--text-dim);
+    font-weight:400;
+  }
+
+  .summary-chart-wrap{
+    margin-top:12px;
+    padding-top:12px;
+    border-top:1px solid var(--line);
+  }
+  .summary-chart-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:8px;
+  }
+  .summary-chart-title{
+    font-family:'Roboto Mono', monospace;
+    font-size:9.5px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+  }
+  .summary-chart-toggle{
+    display:flex;
+    flex-wrap:wrap;
+    gap:4px;
+    justify-content:flex-end;
+  }
+  .chart-metric-btn{
+    background:var(--ink-3);
+    border:1px solid var(--line);
+    color:var(--text-dim);
+    font-family:'Roboto Mono', monospace;
+    font-size:9px;
+    padding:3px 7px;
+    border-radius:4px;
+    cursor:pointer;
+  }
+  .chart-metric-btn.active{
+    background:rgba(129,140,248,0.14);
+    border-color:var(--brass);
+    color:var(--brass-bright);
+  }
+  #yearChart{ display:block; }
+  .chart-bar-label{
+    font-family:'Roboto Mono', monospace;
+    font-size:9px;
+    fill:var(--text-dim);
+  }
+  .chart-bar-rect{ fill:var(--brass); opacity:0.85; }
+  .chart-bar-rect.clickable{ cursor:pointer; }
+  .chart-bar-rect.clickable:hover{ opacity:1; }
+  .chart-bar-rect.selected{ fill:var(--brass-bright); opacity:1; }
+  .chart-bar-rect.dim{ opacity:0.35; }
+  .chart-axis-line{ stroke:var(--line); stroke-width:1; }
+  .chart-bar-value{
+    font-family:'Roboto Mono', monospace;
+    font-size:9.5px;
+    font-weight:600;
+    fill:var(--text-strong);
+  }
+  .chart-empty{
+    font-size:11px;
+    color:var(--text-dim);
+    padding:6px 2px;
+  }
+  .leaflet-control-attribution{
+    background:var(--attribution-bg) !important;
+    color:var(--text-dim) !important;
+    font-family:'Roboto Mono', monospace;
+    font-size:9.5px !important;
+  }
+  .leaflet-control-attribution a{ color:var(--brass) !important; }
+  .leaflet-control-zoom a{
+    background:var(--ink-3) !important;
+    color:var(--text) !important;
+    border-color:var(--line) !important;
+  }
+  .leaflet-control-zoom a:hover{ background:var(--ink-2) !important; }
+
+  .trailhead-icon{ filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5)); }
+
+  .gpx-popup{
+    font-family:'Roboto', sans-serif;
+    font-size:12.5px;
+  }
+  .gpx-popup b{ font-family:'Roboto', sans-serif; font-size:14px; }
+  .popup-file{
+    font-family:'Roboto Mono', monospace;
+    font-size:10.5px;
+    color:var(--text-dim);
+    margin-top:2px;
+  }
+  .popup-date{
+    font-family:'Roboto Mono', monospace;
+    font-size:11px;
+    margin-top:5px;
+    color:#8a5a1f;
+  }
+  .popup-area{
+    font-size:12px;
+    margin-top:4px;
+    color:var(--moss-text);
+  }
+  .popup-details-btn{
+    display:block;
+    width:100%;
+    margin-top:8px;
+    background:#f4ede0;
+    border:1px solid #d8c9a8;
+    color:#8a5a1f;
+    font-family:'Roboto Mono', monospace;
+    font-size:10.5px;
+    font-weight:600;
+    padding:6px 8px;
+    border-radius:5px;
+    cursor:pointer;
+  }
+  .popup-details-btn:hover{ background:#efe2ca; }
+
+  /* Responsive */
+  @media (max-width: 760px){
+    #app{ flex-direction:column; }
+    #sidebar{ width:100%; min-width:0; height:42%; border-right:none; border-bottom:1px solid var(--line); }
+    #mapWrap{ height:58%; }
+    #summaryPanel{ width:240px; }
+  }
+
+  /* ---------- Point detail modal ---------- */
+  .detail-modal-overlay{
+    position:fixed;
+    inset:0;
+    z-index:2000;
+    background:rgba(6,8,11,0.65);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+  }
+
+  .confirm-modal-overlay{
+    position:fixed;
+    inset:0;
+    z-index:2500;
+    background:rgba(6,8,11,0.65);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+  }
+  .confirm-modal{
+    width:100%;
+    max-width:400px;
+    background:var(--ink-2);
+    border:1px solid var(--line);
+    border-radius:10px;
+    box-shadow:0 20px 50px rgba(0,0,0,0.5);
+    padding:22px;
+  }
+  .confirm-modal-title{
+    font-family:'Roboto', sans-serif;
+    font-weight:700;
+    font-size:16px;
+    color:var(--text-strong);
+    margin-bottom:8px;
+  }
+  .confirm-modal-body{
+    font-size:13px;
+    color:var(--text-dim);
+    line-height:1.5;
+    margin-bottom:20px;
+  }
+  .confirm-modal-actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:10px;
+  }
+  .confirm-modal-btn{
+    font-family:'Roboto Mono', monospace;
+    font-size:11px;
+    letter-spacing:0.03em;
+    text-transform:uppercase;
+    padding:9px 16px;
+    border-radius:6px;
+    cursor:pointer;
+    border:1px solid var(--line);
+    background:var(--ink-3);
+    color:var(--text);
+    transition:all .15s ease;
+  }
+  .confirm-modal-btn:hover{ background:var(--hover-fill); }
+  .confirm-modal-btn.danger{
+    background:var(--danger);
+    border-color:var(--danger);
+    color:#fff;
+  }
+  .confirm-modal-btn.danger:hover{ filter:brightness(1.1); }
+
+  /* ---------- Upload loading overlay ---------- */
+  .loading-overlay{
+    position:fixed;
+    inset:0;
+    z-index:3000;
+    background:rgba(6,8,11,0.72);
+    backdrop-filter:blur(2px);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+  }
+  .loading-card{
+    width:100%;
+    max-width:340px;
+    background:var(--ink-2);
+    border:1px solid var(--line);
+    border-radius:12px;
+    box-shadow:0 20px 50px rgba(0,0,0,0.5);
+    padding:28px 26px;
+    text-align:center;
+  }
+  .loading-spinner{
+    width:44px;
+    height:44px;
+    margin:0 auto 18px auto;
+    border-radius:50%;
+    border:3px solid var(--line);
+    border-top-color:var(--brass);
+    animation:loading-spin 0.8s linear infinite;
+  }
+  @keyframes loading-spin{ to{ transform:rotate(360deg); } }
+  .loading-title{
+    font-family:'Roboto Mono', monospace;
+    font-weight:700;
+    font-size:12.5px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--brass);
+    margin-bottom:6px;
+  }
+  .loading-sub{
+    font-size:12.5px;
+    color:var(--text-dim);
+    line-height:1.5;
+    min-height:18px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .loading-bar-track{
+    margin-top:16px;
+    height:5px;
+    border-radius:3px;
+    background:var(--ink-3);
+    border:1px solid var(--line);
+    overflow:hidden;
+  }
+  .loading-bar-fill{
+    height:100%;
+    width:0%;
+    background:linear-gradient(90deg, var(--brass), var(--brass-bright));
+    transition:width .18s ease;
+  }
+  .loading-count{
+    margin-top:8px;
+    font-family:'Roboto Mono', monospace;
+    font-size:10.5px;
+    letter-spacing:0.04em;
+    color:var(--text-dim);
+  }
+
+  .detail-modal{
+    width:100%;
+    max-width:1320px;
+    max-height:88vh;
+    overflow-y:auto;
+    background:var(--ink-2);
+    border:1px solid var(--line);
+    border-radius:10px;
+    box-shadow:0 20px 50px rgba(0,0,0,0.5);
+    padding:20px 22px 24px 22px;
+  }
+  .detail-columns{
+    display:grid;
+    grid-template-columns:1.15fr 1fr;
+    gap:20px;
+    align-items:start;
+  }
+  .detail-col-map, .detail-col-tables{ min-width:0; }
+  @media (max-width: 1100px){
+    .detail-columns{ grid-template-columns:1fr; }
+  }
+  .detail-modal-header{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:12px;
+    border-bottom:1px solid var(--line);
+    padding-bottom:14px;
+    margin-bottom:16px;
+  }
+  .detail-modal-title{
+    font-family:'Roboto', sans-serif;
+    font-weight:600;
+    font-size:17px;
+    color:var(--text-strong);
+  }
+  .detail-modal-sub{
+    font-family:'Roboto Mono', monospace;
+    font-size:11px;
+    color:var(--text-dim);
+    margin-top:3px;
+  }
+  .detail-modal-close{
+    background:var(--ink-3);
+    border:1px solid var(--line);
+    color:var(--text-dim);
+    width:30px;
+    height:30px;
+    border-radius:7px;
+    font-size:18px;
+    line-height:1;
+    cursor:pointer;
+    flex-shrink:0;
+  }
+  .detail-modal-close:hover{ color:var(--text); border-color:var(--danger); }
+
+  .detail-modal-actions{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-shrink:0;
+  }
+  .detail-nav-group{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    background:var(--ink-3);
+    border:1px solid var(--line);
+    border-radius:7px;
+    padding:0 4px;
+    height:30px;
+  }
+  .detail-nav-btn{
+    background:transparent;
+    border:none;
+    color:var(--text-dim);
+    width:24px;
+    height:24px;
+    border-radius:5px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    transition:color .15s ease, background .15s ease;
+  }
+  .detail-nav-btn:hover:not(:disabled){ color:var(--text); background:var(--hover-fill); }
+  .detail-nav-btn:disabled{ opacity:0.3; cursor:not-allowed; }
+  .detail-nav-pos{
+    font-family:'Roboto Mono', monospace;
+    font-size:10.5px;
+    color:var(--text-dim);
+    white-space:nowrap;
+    min-width:38px;
+    text-align:center;
+  }
+
+  .detail-stat-row{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
+    gap:10px;
+    margin-bottom:18px;
+  }
+  .detail-stat{
+    background:var(--ink-3);
+    border:1px solid var(--line);
+    border-radius:7px;
+    padding:10px 12px;
+  }
+  .detail-stat-label{
+    font-family:'Roboto Mono', monospace;
+    font-size:9px;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    margin-bottom:5px;
+    display:flex;
+    align-items:center;
+    gap:5px;
+  }
+  .detail-stat-label svg{ flex-shrink:0; opacity:0.85; }
+  .detail-stat-value{
+    font-family:'Roboto Mono', monospace;
+    font-weight:700;
+    font-size:19px;
+    color:var(--text-strong);
+  }
+  .detail-stat-value.good{ color:var(--moss-bright); }
+  .detail-stat-value.bad{ color:var(--danger); }
+  .detail-stat-value.warn{ color:#e0a15c; }
+  .detail-stat-sub{
+    font-family:'Roboto Mono', monospace;
+    font-size:9.5px;
+    color:var(--text-dim);
+    margin-top:3px;
+  }
+  .detail-stat.clickable{ cursor:pointer; transition:border-color .15s ease, background .15s ease; }
+  .detail-stat.clickable:hover{ border-color:var(--danger); background:rgba(192,96,74,0.08); }
+
+  .detail-section{ margin-bottom:20px; }
+  .detail-section:last-child{ margin-bottom:0; }
+  .detail-section-title{
+    font-family:'Roboto Mono', monospace;
+    font-size:10px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--brass);
+    margin-bottom:8px;
+  }
+
+  .detail-map-wrap{ position:relative; }
+  .detail-track-map{
+    background:var(--ink-3);
+    border:1px solid var(--line);
+    border-radius:7px;
+    padding:8px;
+    height:400px;
+  }
+  .detail-map-layers{
+    position:absolute;
+    top:14px;
+    right:14px;
+    z-index:1000;
+    display:flex;
+    align-items:center;
+    gap:4px;
+    background:var(--ink-2);
+    border:1px solid var(--line);
+    border-radius:7px;
+    padding:4px;
+    box-shadow:var(--shadow);
+  }
+  .detail-map-layers-toggle{
+    background:transparent;
+    border:none;
+    color:var(--text-dim);
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:24px;
+    height:24px;
+    border-radius:5px;
+    flex-shrink:0;
+    transition:color .15s ease, background .15s ease;
+  }
+  .detail-map-layers-toggle:hover{ color:var(--text); background:var(--hover-fill); }
+  .detail-map-layers-options{
+    display:flex;
+    gap:4px;
+    overflow:hidden;
+    max-width:280px;
+    opacity:1;
+    transition:max-width .2s ease, opacity .15s ease, margin .2s ease;
+  }
+  .detail-map-layers.collapsed .detail-map-layers-options{
+    max-width:0;
+    opacity:0;
+  }
+  .detail-layer-btn{
+    background:var(--ink-3);
+    border:1px solid var(--line);
+    color:var(--text-dim);
+    font-family:'Roboto Mono', monospace;
+    font-size:9px;
+    letter-spacing:0.02em;
+    padding:5px 8px;
+    border-radius:4px;
+    cursor:pointer;
+    transition:all .15s ease;
+  }
+  .detail-layer-btn.active{
+    background:rgba(129,140,248,0.14);
+    border-color:var(--brass);
+    color:var(--brass-bright);
+  }
+  .detail-layer-btn:hover{ color:var(--text); }
+  .detail-legend{
+    display:flex;
+    flex-wrap:wrap;
+    gap:12px;
+    margin-top:8px;
+  }
+  .detail-legend-item{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:10.5px;
+    color:var(--text-dim);
+  }
+  .detail-legend-swatch{
+    width:14px;
+    height:3px;
+    border-radius:2px;
+    flex-shrink:0;
+  }
+
+  .detail-table-wrap{ max-height:220px; overflow-y:auto; border:1px solid var(--line); border-radius:7px; }
+  .detail-table-wrap-tall{ max-height:280px; }
+  .detail-table{
+    width:100%;
+    border-collapse:collapse;
+    font-family:'Roboto Mono', monospace;
+    font-size:10.5px;
+  }
+  .detail-table thead th{
+    position:sticky;
+    top:0;
+    background:var(--ink-3);
+    color:var(--text-dim);
+    text-align:left;
+    padding:7px 8px;
+    font-weight:600;
+    letter-spacing:0.03em;
+    text-transform:uppercase;
+    font-size:9px;
+    border-bottom:1px solid var(--line);
+    z-index:1;
+  }
+  .detail-table td{
+    padding:6px 8px;
+    border-bottom:1px solid var(--line);
+    color:var(--text);
+    white-space:nowrap;
+  }
+  .detail-table tbody tr:last-child td{ border-bottom:none; }
+  .detail-table tbody tr:hover{ background:var(--hover-fill); }
+  .detail-note{ color:var(--text-dim); white-space:normal; }
+  .detail-badge{
+    display:inline-block;
+    font-size:9px;
+    padding:2px 6px;
+    border-radius:3px;
+    font-weight:600;
+    letter-spacing:0.02em;
+  }
+  .detail-badge.speed{ background:rgba(224,161,92,0.15); color:#e0a15c; }
+  .detail-badge.drift{ background:rgba(192,96,74,0.15); color:var(--danger); }
+  .detail-badge.time{ background:rgba(124,135,152,0.18); color:var(--text-dim); }
+  .detail-empty-note{ padding:12px; font-size:11.5px; color:var(--text-dim); }
+
+  ::selection{ background:rgba(129,140,248,0.35); }
+  :focus-visible{ outline:2px solid var(--brass-bright); outline-offset:2px; }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="sidebar">
+    <header>
+      <div class="header-top">
+        <div class="eyebrow">RSBSA Parcel &mdash; GPX Plotter</div>
+        <button id="themeToggle" class="theme-toggle" title="Toggle light / dark mode" aria-label="Toggle light / dark mode">
+          <svg id="iconMoon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+          <svg id="iconSun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+        </button>
+      </div>
+      <div class="subtitle">Drop in GPX tracks to plot them on the map. Files stay in this browser tab only — nothing is uploaded anywhere.</div>
+    </header>
+
+    <div id="dropzone">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#c08a3e" stroke-width="1.6"><path d="M12 3v12m0-12l-4 4m4-4l4 4"/><path d="M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg>
+      <div class="dz-title">Drop GPX files here, or click to browse</div>
+      <div class="dz-sub">.GPX · MULTIPLE FILES SUPPORTED</div>
+      <input type="file" id="fileInput" accept=".gpx" multiple />
+    </div>
+
+    <div id="trackListWrap">
+      <div class="search-wrap">
+        <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input type="text" id="trackSearch" class="search-input" placeholder="Search loaded files…" autocomplete="off" />
+        <button class="search-clear" id="searchClear" title="Clear search" style="display:none;">&times;</button>
+      </div>
+      <div class="list-heading">
+        <span>Loaded Tracks <span id="trackCount">0</span></span>
+        <button class="remove-all-btn" id="removeAllBtn" title="Remove all loaded GPX files">Remove All</button>
+      </div>
+      <div id="trackList">
+        <div class="empty-state" id="emptyState">No tracks loaded yet.<br>Your trails will appear here with distance and elevation stats.</div>
+      </div>
+      <div class="empty-state" id="noSearchResults" style="display:none;">No files match your search.</div>
+    </div>
+
+    <div id="layerSwitch">
+      <button class="layer-btn" data-layer="topo">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20l6-11 4 6 3-5 5 10H3z"/></svg>
+        Terrain
+      </button>
+      <button class="layer-btn" data-layer="osm">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3l6 2 6-2v16l-6 2-6-2-6 2V5l6-2z"/><path d="M9 3v16M15 5v16"/></svg>
+        Map
+      </button>
+      <button class="layer-btn" data-layer="sat-global">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 010 18 14 14 0 010-18z"/></svg>
+        Satellite (Global)
+      </button>
+      <button class="layer-btn active" data-layer="sat-esri">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3l3 3-7 7-3-3 7-7z"/><path d="M9 13l-5 5"/><path d="M14 8a6 6 0 016 6"/><circle cx="19" cy="5" r="1" fill="currentColor" stroke="none"/></svg>
+        Satellite (Hi-Res)
+      </button>
+    </div>
+  </div>
+
+  <div id="mapWrap">
+    <div id="map"></div>
+
+    <div id="summaryPanel">
+      <div class="summary-header" id="summaryHeader">
+        <span class="summary-title">Details</span>
+        <button class="summary-collapse" id="summaryCollapse" title="Collapse panel">&minus;</button>
+      </div>
+      <div class="summary-body" id="summaryBody">
+        <div class="summary-tabs">
+          <button class="summary-tab active" data-tab="stats">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M6 21V10m6 11V4m6 17v-7"/></svg>
+            Summary
+          </button>
+          <button class="summary-tab" data-tab="clean">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.3 2.3L16 9.8"/></svg>
+            Clean<span class="tab-badge green" id="cleanTabBadge" style="display:none;">0</span>
+          </button>
+          <button class="summary-tab" data-tab="flagged">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 16H3l9-16z"/><path d="M12 10v4"/><circle cx="12" cy="17.2" r="0.4" fill="currentColor" stroke="none"/></svg>
+            Flagged<span class="tab-badge" id="flaggedTabBadge" style="display:none;">0</span>
+          </button>
+          <button class="summary-tab" data-tab="overlaps">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="6"/><circle cx="15" cy="15" r="6"/></svg>
+            Overlaps<span class="tab-badge" id="overlapsTabBadge" style="display:none;">0</span>
+          </button>
+        </div>
+
+        <div class="summary-pane" id="paneStats">
+          <div class="summary-stat-grid">
+            <div class="summary-stat">
+              <div class="summary-stat-label">Total Area</div>
+              <div class="summary-stat-value" id="statTotalArea">0.000 <span>ha</span></div>
+            </div>
+            <div class="summary-stat">
+              <div class="summary-stat-label">Files Uploaded</div>
+              <div class="summary-stat-value" id="statTotalFiles">0</div>
+            </div>
+            <div class="summary-stat" id="statCurrentYearTile">
+              <div class="summary-stat-label" id="statCurrentYearLabel">This Year</div>
+              <div class="summary-stat-value" id="statCurrentYear">0</div>
+            </div>
+            <div class="summary-stat" id="statLastYearTile">
+              <div class="summary-stat-label" id="statLastYearLabel">Last Year</div>
+              <div class="summary-stat-value" id="statLastYear">0</div>
+            </div>
+          </div>
+
+          <div class="summary-chart-wrap" id="chartWrap">
+            <div class="summary-chart-header">
+              <span class="summary-chart-title" id="yearChartTitle">Files by Year</span>
+              <div class="summary-chart-toggle" id="chartMetricToggle">
+                <button class="chart-metric-btn active" data-metric="count">Files</button>
+                <button class="chart-metric-btn" data-metric="area">Area</button>
+              </div>
+            </div>
+            <div id="yearChart"></div>
+          </div>
+
+          <div class="summary-chart-wrap" id="monthChartWrap">
+            <div class="summary-chart-header">
+              <span class="summary-chart-title" id="monthChartTitle">Monthly Breakdown</span>
+              <div class="summary-chart-toggle" id="monthYearToggle"></div>
+            </div>
+            <div id="monthChart"></div>
+          </div>
+        </div>
+
+        <div class="summary-pane" id="paneFlagged" style="display:none;">
+          <div class="summary-stat-grid">
+            <div class="summary-stat">
+              <div class="summary-stat-label">Flagged Area</div>
+              <div class="summary-stat-value" id="statFlaggedArea">0.000 <span>ha</span></div>
+            </div>
+            <div class="summary-stat">
+              <div class="summary-stat-label">Files Flagged</div>
+              <div class="summary-stat-value" id="statFlaggedFiles">0</div>
+            </div>
+            <div class="summary-stat" id="statFlaggedCurrentYearTile">
+              <div class="summary-stat-label" id="statFlaggedCurrentYearLabel">This Year</div>
+              <div class="summary-stat-value" id="statFlaggedCurrentYear">0</div>
+            </div>
+            <div class="summary-stat" id="statFlaggedLastYearTile">
+              <div class="summary-stat-label" id="statFlaggedLastYearLabel">Last Year</div>
+              <div class="summary-stat-value" id="statFlaggedLastYear">0</div>
+            </div>
+          </div>
+
+          <div class="flagged-rank-header">Ranked by % of points flagged, highest first</div>
+          <div class="flagged-rank-list" id="flaggedRankList">
+            <div class="summary-empty">No tracks loaded yet.</div>
+          </div>
+        </div>
+
+        <div class="summary-pane" id="paneOverlaps" style="display:none;">
+          <div class="summary-chart-header" style="margin-bottom:10px;">
+            <span class="summary-chart-title">Min. Overlap</span>
+            <div class="summary-chart-toggle" id="overlapThresholdToggle">
+              <button class="chart-metric-btn" data-pct="0">Any</button>
+              <button class="chart-metric-btn" data-pct="10">10%</button>
+              <button class="chart-metric-btn active" data-pct="20">20%</button>
+              <button class="chart-metric-btn" data-pct="50">50%</button>
+              <button class="chart-metric-btn" data-pct="off">Off</button>
+            </div>
+          </div>
+
+          <div class="summary-stat-grid">
+            <div class="summary-stat">
+              <div class="summary-stat-label">Overlapping Area</div>
+              <div class="summary-stat-value" id="statOverlapArea">0.000 <span>ha</span></div>
+            </div>
+            <div class="summary-stat">
+              <div class="summary-stat-label">Overlapping Pairs</div>
+              <div class="summary-stat-value" id="statOverlapPairs">0</div>
+            </div>
+            <div class="summary-stat">
+              <div class="summary-stat-label">Parcels Involved</div>
+              <div class="summary-stat-value" id="statOverlapParcels">0</div>
+            </div>
+          </div>
+
+          <div class="flagged-rank-header" id="overlapRankHeader">Showing overlaps ≥ 20% of the smaller parcel, largest first</div>
+          <div class="flagged-rank-list" id="overlapRankList">
+            <div class="summary-empty">No overlaps detected — closed parcels loaded so far don't intersect.</div>
+          </div>
+        </div>
+
+        <div class="summary-pane" id="paneClean" style="display:none;">
+          <div class="summary-stat-grid">
+            <div class="summary-stat">
+              <div class="summary-stat-label">Clean Area</div>
+              <div class="summary-stat-value" id="statCleanArea">0.000 <span>ha</span></div>
+            </div>
+            <div class="summary-stat">
+              <div class="summary-stat-label">Files Clean</div>
+              <div class="summary-stat-value" id="statCleanFiles">0</div>
+            </div>
+            <div class="summary-stat" id="statCleanCurrentYearTile">
+              <div class="summary-stat-label" id="statCleanCurrentYearLabel">This Year</div>
+              <div class="summary-stat-value" id="statCleanCurrentYear">0</div>
+            </div>
+            <div class="summary-stat" id="statCleanLastYearTile">
+              <div class="summary-stat-label" id="statCleanLastYearLabel">Last Year</div>
+              <div class="summary-stat-value" id="statCleanLastYear">0</div>
+            </div>
+          </div>
+
+          <div class="flagged-rank-header">No anomalies detected, largest area first</div>
+          <div class="flagged-rank-list" id="cleanRankList">
+            <div class="summary-empty">No tracks loaded yet.</div>
+          </div>
+        </div>
+
+        <div class="summary-footnote" id="unplottableFootnote" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="loadingOverlay" class="loading-overlay" style="display:none;">
+  <div class="loading-card" role="status" aria-live="polite">
+    <div class="loading-spinner"></div>
+    <div class="loading-title">Loading GPX Files</div>
+    <div class="loading-sub" id="loadingSub">Reading track data…</div>
+    <div class="loading-bar-track">
+      <div class="loading-bar-fill" id="loadingBarFill"></div>
+    </div>
+    <div class="loading-count" id="loadingCount">0 / 0</div>
+  </div>
+</div>
+
+<div id="confirmModalOverlay" class="confirm-modal-overlay" style="display:none;">
+  <div class="confirm-modal" role="alertdialog" aria-modal="true">
+    <div class="confirm-modal-title" id="confirmModalTitle">Are you sure?</div>
+    <div class="confirm-modal-body" id="confirmModalBody"></div>
+    <div class="confirm-modal-actions">
+      <button class="confirm-modal-btn cancel" id="confirmModalCancel">Cancel</button>
+      <button class="confirm-modal-btn danger" id="confirmModalOk">Remove All</button>
+    </div>
+  </div>
+</div>
+
+<div id="detailModalOverlay" class="detail-modal-overlay" style="display:none;">
+  <div class="detail-modal" role="dialog" aria-modal="true">
+    <div class="detail-modal-header">
+      <div>
+        <div class="detail-modal-title" id="detailTrackName">Track</div>
+        <div class="detail-modal-sub" id="detailTrackFile">file.gpx</div>
+      </div>
+      <div class="detail-modal-actions">
+        <div class="detail-nav-group">
+          <button class="detail-nav-btn" id="detailPrevBtn" title="Previous track" aria-label="Previous track">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <span class="detail-nav-pos" id="detailNavPos">1 / 1</span>
+          <button class="detail-nav-btn" id="detailNextBtn" title="Next track" aria-label="Next track">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
+        <button class="detail-modal-close" id="detailModalClose" title="Close" aria-label="Close">&times;</button>
+      </div>
+    </div>
+
+    <div class="detail-stat-row" id="detailStatRow"></div>
+    <div class="detail-columns">
+      <div class="detail-col-map">
+        <div class="detail-section">
+          <div class="detail-section-title">Track Map</div>
+          <div class="detail-map-wrap">
+            <div id="detailTrackMap" class="detail-track-map"></div>
+            <div class="detail-map-layers" id="detailMapLayers">
+              <button class="detail-map-layers-toggle" id="detailMapLayersToggle" title="Show/hide basemap options">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+              </button>
+              <div class="detail-map-layers-options" id="detailMapLayersOptions">
+                <button class="detail-layer-btn" data-layer="osm">Map</button>
+                <button class="detail-layer-btn" data-layer="topo">Terrain</button>
+                <button class="detail-layer-btn active" data-layer="sat">Satellite</button>
+              </div>
+            </div>
+          </div>
+          <div class="detail-legend" id="detailLegend"></div>
+        </div>
+      </div>
+
+      <div class="detail-col-tables">
+        <div class="detail-section" id="detailFlaggedSection">
+          <div class="detail-section-title">Flagged Points</div>
+          <div class="detail-table-wrap">
+            <table class="detail-table" id="detailFlaggedTable"></table>
+          </div>
+        </div>
+
+        <div class="detail-section">
+          <div class="detail-section-title">All Points</div>
+          <div class="detail-table-wrap detail-table-wrap-tall">
+            <table class="detail-table" id="detailAllTable"></table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- Map setup ---------------- */
+  const map = L.map('map', { zoomControl:true, attributionControl:true }).setView([20,0], 3);
+
+  const baseLayers = {
+    topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+      maxZoom: 17,
+      attribution: 'Map data: &copy; OpenStreetMap contributors, SRTM | Map style: &copy; OpenTopoMap (CC-BY-SA)'
+    }),
+    osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }),
+    'sat-esri': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19,
+      maxNativeZoom: 17,
+      attribution: 'Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics'
+    }),
+    'sat-global': L.tileLayer.wms('https://tiles.maps.eox.at/wms', {
+      layers: 's2cloudless-2024_3857',
+      format: 'image/png',
+      transparent: false,
+      version: '1.1.1',
+      maxZoom: 16,
+      attribution: 'Sentinel-2 cloudless 2024 &copy; EOX IT Services GmbH (Contains modified Copernicus Sentinel data)'
+    })
+  };
+  baseLayers['sat-esri'].addTo(map);
+  let currentBase = 'sat-esri';
+
+  document.querySelectorAll('.layer-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const key = btn.dataset.layer;
+      if(key === currentBase) return;
+      map.removeLayer(baseLayers[currentBase]);
+      baseLayers[key].addTo(map);
+      currentBase = key;
+      document.querySelectorAll('.layer-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
+  /* ---------------- Track color palette ---------------- */
+  const palette = ['#c08a3e','#5c8a6a','#4d7ea8','#a85c8f','#c0604a','#8a7fc0','#7fae4a','#c0a53e','#4aa8a0','#c07e9e'];
+  let colorIndex = 0;
+  function nextColor(){ const c = palette[colorIndex % palette.length]; colorIndex++; return c; }
+
+  /* ---------------- State ---------------- */
+  let trackIdSeq = 1;
+  const tracks = new Map(); // id -> {name,color,layerGroup,latlngs,eles,distanceKm,gain,loss,visible}
+  let unplottableFiles = []; // fileNames rejected before ever becoming a track (no points, no waypoints)
+
+  const trackListEl = document.getElementById('trackList');
+  const trackCountEl = document.getElementById('trackCount');
+  let emptyStateEl = document.getElementById('emptyState');
+
+  function updateEmptyState(){
+    emptyStateEl.style.display = tracks.size === 0 ? 'block' : 'none';
+    trackCountEl.textContent = tracks.size;
+    const removeAllBtn = document.getElementById('removeAllBtn');
+    if(removeAllBtn) removeAllBtn.disabled = tracks.size === 0;
+  }
+
+  /* ---------------- Search ---------------- */
+  const searchInput = document.getElementById('trackSearch');
+  const searchClearBtn = document.getElementById('searchClear');
+  const noSearchResultsEl = document.getElementById('noSearchResults');
+
+  function applySearchFilter(){
+    const q = searchInput.value.trim().toLowerCase();
+    searchClearBtn.style.display = q ? 'block' : 'none';
+
+    let visibleCount = 0;
+    document.querySelectorAll('.track-card').forEach(card=>{
+      const match = !q || (card.dataset.search || '').includes(q);
+      card.style.display = match ? '' : 'none';
+      if(match) visibleCount++;
+    });
+
+    const hasTracks = tracks.size > 0;
+    noSearchResultsEl.style.display = (hasTracks && q && visibleCount === 0) ? 'block' : 'none';
+    emptyStateEl.style.display = (!hasTracks && !q) ? 'block' : 'none';
+  }
+
+  searchInput.addEventListener('input', applySearchFilter);
+  searchClearBtn.addEventListener('click', ()=>{
+    searchInput.value = '';
+    applySearchFilter();
+    searchInput.focus();
+  });
+
+  /* ---------------- Geo helpers ---------------- */
+  function haversineKm(a, b){
+    const R = 6371;
+    const dLat = (b[0]-a[0]) * Math.PI/180;
+    const dLon = (b[1]-a[1]) * Math.PI/180;
+    const lat1 = a[0]*Math.PI/180, lat2 = b[0]*Math.PI/180;
+    const h = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
+    return R * 2 * Math.asin(Math.sqrt(h));
+  }
+
+  function computeStats(latlngs, eles){
+    let dist = 0;
+    for(let i=1;i<latlngs.length;i++) dist += haversineKm(latlngs[i-1], latlngs[i]);
+    let gain=0, loss=0;
+    for(let i=1;i<eles.length;i++){
+      if(eles[i]==null || eles[i-1]==null) continue;
+      const d = eles[i]-eles[i-1];
+      if(d>0) gain+=d; else loss+=Math.abs(d);
+    }
+    return { distanceKm: dist, gain, loss };
+  }
+
+  // Spherical polygon area (shoelace on a sphere), returns square meters.
+  // Standard geodesic-area approximation used by Leaflet.draw etc.
+  function geodesicAreaM2(latlngs){
+    const R = 6378137.0;
+    const d2r = Math.PI / 180;
+    let area = 0;
+    const n = latlngs.length;
+    if(n < 3) return 0;
+    for(let i=0;i<n;i++){
+      const p1 = latlngs[i];
+      const p2 = latlngs[(i+1) % n];
+      area += ((p2[1]-p1[1]) * d2r) * (2 + Math.sin(p1[0]*d2r) + Math.sin(p2[0]*d2r));
+    }
+    return Math.abs(area * R * R / 2.0);
+  }
+
+  // Treat a track as a closed loop (a walked boundary) if its start and
+  // end points are within ~30m of each other, so area is only reported
+  // when it's meaningful.
+  function computeArea(latlngs){
+    if(latlngs.length < 3) return null;
+    const closingGapKm = haversineKm(latlngs[0], latlngs[latlngs.length-1]);
+    if(closingGapKm > 0.03) return null;
+    const m2 = geodesicAreaM2(latlngs);
+    return m2 / 10000; // hectares
+  }
+
+  /* ---------------- Parcel overlap detection ---------------- */
+  // Only tracks that resolve to a closed loop (computeArea() != null) are
+  // treated as parcels here — open trails have no "inside" to overlap with.
+
+  function latLonBounds(poly){
+    let minLat=Infinity, maxLat=-Infinity, minLon=Infinity, maxLon=-Infinity;
+    poly.forEach(p=>{
+      if(p[0]<minLat) minLat=p[0];
+      if(p[0]>maxLat) maxLat=p[0];
+      if(p[1]<minLon) minLon=p[1];
+      if(p[1]>maxLon) maxLon=p[1];
+    });
+    return { minLat, maxLat, minLon, maxLon };
+  }
+
+  function boundsOverlap(a, b){
+    const ba = latLonBounds(a), bb = latLonBounds(b);
+    return ba.minLat <= bb.maxLat && ba.maxLat >= bb.minLat &&
+           ba.minLon <= bb.maxLon && ba.maxLon >= bb.minLon;
+  }
+
+  // Ray-casting point-in-polygon. Treats lon as x, lat as y — fine at the
+  // scale of a single field parcel.
+  function pointInPolygon(pt, poly){
+    const x = pt[1], y = pt[0];
+    let inside = false;
+    for(let i=0, j=poly.length-1; i<poly.length; j=i++){
+      const xi = poly[i][1], yi = poly[i][0];
+      const xj = poly[j][1], yj = poly[j][0];
+      const intersects = ((yi>y) !== (yj>y)) &&
+        (x < (xj-xi) * (y-yi) / ((yj-yi) || 1e-12) + xi);
+      if(intersects) inside = !inside;
+    }
+    return inside;
+  }
+
+  function ccw(a, b, c){
+    return (c[0]-a[0])*(b[1]-a[1]) - (b[0]-a[0])*(c[1]-a[1]);
+  }
+  function segmentsIntersect(p1, p2, p3, p4){
+    const d1 = ccw(p3,p4,p1), d2 = ccw(p3,p4,p2);
+    const d3 = ccw(p1,p2,p3), d4 = ccw(p1,p2,p4);
+    return (((d1>0 && d2<0) || (d1<0 && d2>0)) && ((d3>0 && d4<0) || (d3<0 && d4>0)));
+  }
+
+  // True if the two closed rings genuinely overlap (share area), not just
+  // touch at a single point/edge.
+  function polygonsOverlap(a, b){
+    if(!boundsOverlap(a, b)) return false;
+    const na = a.length, nb = b.length;
+    for(let i=0;i<na;i++){
+      const a1=a[i], a2=a[(i+1)%na];
+      for(let j=0;j<nb;j++){
+        const b1=b[j], b2=b[(j+1)%nb];
+        if(segmentsIntersect(a1,a2,b1,b2)) return true;
+      }
+    }
+    // No edges cross — the two rings could still be nested (one fully inside
+    // the other), so fall back to a containment check.
+    if(pointInPolygon(a[0], b)) return true;
+    if(pointInPolygon(b[0], a)) return true;
+    return false;
+  }
+
+  // Estimates the overlap area (hectares) between two closed rings by
+  // sampling a grid over their shared bounding box and counting points that
+  // fall inside both. Works for concave parcels, unlike simple clipping.
+  function estimateOverlapAreaHa(a, b, samples = 48){
+    const ba = latLonBounds(a), bb = latLonBounds(b);
+    const minLat = Math.max(ba.minLat, bb.minLat);
+    const maxLat = Math.min(ba.maxLat, bb.maxLat);
+    const minLon = Math.max(ba.minLon, bb.minLon);
+    const maxLon = Math.min(ba.maxLon, bb.maxLon);
+    if(minLat >= maxLat || minLon >= maxLon) return 0;
+
+    const latStep = (maxLat - minLat) / samples;
+    const lonStep = (maxLon - minLon) / samples;
+    const midLat = (minLat + maxLat) / 2;
+    const mPerDegLat = 111320;
+    const mPerDegLon = 111320 * Math.cos(midLat * Math.PI / 180);
+    const cellAreaM2 = (latStep * mPerDegLat) * (lonStep * mPerDegLon);
+
+    let hits = 0;
+    for(let i=0;i<samples;i++){
+      const lat = minLat + (i+0.5) * latStep;
+      for(let j=0;j<samples;j++){
+        const lon = minLon + (j+0.5) * lonStep;
+        const pt = [lat, lon];
+        if(pointInPolygon(pt, a) && pointInPolygon(pt, b)) hits++;
+      }
+    }
+    return (hits * cellAreaM2) / 10000; // hectares
+  }
+
+  let overlapPairs = []; // [{aId,bId,aName,bName,areaHa}]
+
+  function updateOverlapVisual(t){
+    const hasOverlap = t.overlaps && t.overlaps.length > 0;
+    if(t.fillPoly){
+      t.fillPoly.setStyle({
+        fillColor: hasOverlap ? '#e0393f' : t.color,
+        fillOpacity: hasOverlap ? 0.3 : 0.12
+      });
+    }
+    if(t.poly){
+      t.poly.setStyle({
+        dashArray: hasOverlap ? '6 5' : null,
+        color: hasOverlap ? '#e0393f' : t.color
+      });
+    }
+  }
+
+  function updateOverlapBadge(id){
+    const t = tracks.get(id);
+    const slot = document.getElementById(`overlapBadge-${id}`);
+    if(!t || !slot) return;
+    if(!t.overlaps || t.overlaps.length === 0){
+      slot.innerHTML = '';
+      return;
+    }
+    const names = t.overlaps.map(o => {
+      const partner = tracks.get(o.id);
+      const hiddenNote = partner && !partner.visible ? ' — hidden, click to show' : '';
+      return `${escapeHtml(o.name)} (${o.pct.toFixed(0)}%${hiddenNote})`;
+    }).join(', ');
+    const totalHa = t.overlaps.reduce((s,o)=>s+o.areaHa, 0);
+    const label = t.overlaps.length === 1 ? 'parcel' : 'parcels';
+    slot.innerHTML = `<div class="overlap-badge bad" id="overlapBadgeInner-${id}" style="cursor:pointer;" title="Click to reveal and zoom to the overlapping parcel(s)">⛔ Overlaps ${t.overlaps.length} ${label}: ${names} (~${fmtHa(totalHa)})</div>`;
+    const inner = document.getElementById(`overlapBadgeInner-${id}`);
+    if(inner){
+      inner.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        revealOverlapGroup(id);
+      });
+    }
+  }
+
+  // Recomputes every pairwise overlap among currently-loaded closed parcels.
+  // Called whenever a track is added or removed.
+  function recomputeOverlaps(){
+    const closed = Array.from(tracks.values()).filter(t => t.areaHa != null && t.latlngs && t.latlngs.length >= 3);
+    closed.forEach(t => { t.overlaps = []; });
+    overlapPairs = [];
+
+    // "Off" skips the pairwise geometry pass entirely — no detection runs,
+    // no badges/highlights are shown, and the panel says so explicitly.
+    if(overlapThresholdPct !== 'off'){
+      for(let i=0;i<closed.length;i++){
+        for(let j=i+1;j<closed.length;j++){
+          const A = closed[i], B = closed[j];
+          if(polygonsOverlap(A.latlngs, B.latlngs)){
+            const overlapHa = estimateOverlapAreaHa(A.latlngs, B.latlngs);
+            const smallerHa = Math.min(A.areaHa, B.areaHa);
+            const pctOfSmaller = smallerHa > 0 ? (overlapHa / smallerHa) * 100 : 0;
+            if(pctOfSmaller < overlapThresholdPct) continue; // too small to count as a real overlap
+            A.overlaps.push({ id: B.id, name: B.name, areaHa: overlapHa, pct: pctOfSmaller });
+            B.overlaps.push({ id: A.id, name: A.name, areaHa: overlapHa, pct: pctOfSmaller });
+            overlapPairs.push({ aId: A.id, bId: B.id, aName: A.name, bName: B.name, areaHa: overlapHa, pct: pctOfSmaller });
+          }
+        }
+      }
+    }
+
+    tracks.forEach(t=>{
+      updateOverlapVisual(t);
+      updateOverlapBadge(t.id);
+    });
+    renderOverlapPanel();
+  }
+
+  function renderOverlapPanel(){
+    const isOff = overlapThresholdPct === 'off';
+    const badge = document.getElementById('overlapsTabBadge');
+    if(badge){
+      badge.textContent = overlapPairs.length > 99 ? '99+' : overlapPairs.length;
+      badge.style.display = (!isOff && overlapPairs.length > 0) ? 'flex' : 'none';
+    }
+
+    const totalOverlapHa = overlapPairs.reduce((s,p)=>s+p.areaHa, 0);
+    const involved = new Set();
+    overlapPairs.forEach(p=>{ involved.add(p.aId); involved.add(p.bId); });
+
+    const statArea = document.getElementById('statOverlapArea');
+    const statPairs = document.getElementById('statOverlapPairs');
+    const statParcels = document.getElementById('statOverlapParcels');
+    if(statArea) statArea.innerHTML = `${totalOverlapHa.toFixed(3)} <span>ha</span>`;
+    if(statPairs) statPairs.textContent = overlapPairs.length;
+    if(statParcels) statParcels.textContent = involved.size;
+
+    const listEl = document.getElementById('overlapRankList');
+    const headerEl = document.getElementById('overlapRankHeader');
+    if(headerEl){
+      if(isOff){
+        headerEl.textContent = `Overlap detection is off`;
+      } else if(overlapThresholdPct > 0){
+        headerEl.textContent = `Showing overlaps ≥ ${overlapThresholdPct}% of the smaller parcel, largest first`;
+      } else {
+        headerEl.textContent = `Showing any detected overlap, largest first`;
+      }
+    }
+    if(!listEl) return;
+    if(isOff){
+      listEl.innerHTML = `<div class="summary-empty">Overlap detection is turned off. Pick a threshold above to check parcels again.</div>`;
+      return;
+    }
+    if(overlapPairs.length === 0){
+      listEl.innerHTML = `<div class="summary-empty">No overlaps at or above this threshold — try lowering "Min. Overlap" above.</div>`;
+      return;
+    }
+
+    const ranked = [...overlapPairs].sort((a,b)=> b.areaHa - a.areaHa);
+    listEl.innerHTML = ranked.map((p, i)=>{
+      const aTrack = tracks.get(p.aId), bTrack = tracks.get(p.bId);
+      const anyHidden = (aTrack && !aTrack.visible) || (bTrack && !bTrack.visible);
+      const subText = anyHidden
+        ? `${p.pct.toFixed(0)}% of the smaller parcel · one is hidden, click to show`
+        : `${p.pct.toFixed(0)}% of the smaller parcel`;
+      return `<div class="flagged-rank-item" data-a="${p.aId}" data-b="${p.bId}">
+        <div class="flagged-rank-num">${i+1}</div>
+        <div class="flagged-rank-info">
+          <div class="flagged-rank-name">${escapeHtml(p.aName)} ↔ ${escapeHtml(p.bName)}</div>
+          <div class="flagged-rank-sub">${subText}</div>
+        </div>
+        <div class="flagged-rank-pct bad">${p.areaHa.toFixed(3)}<span style="font-size:9px;"> ha</span></div>
+      </div>`;
+    }).join('');
+
+    listEl.querySelectorAll('.flagged-rank-item').forEach(item=>{
+      item.addEventListener('click', ()=>{
+        const aId = parseInt(item.dataset.a, 10);
+        const bId = parseInt(item.dataset.b, 10);
+        const a = tracks.get(aId), b = tracks.get(bId);
+        if(a) showTrack(a);
+        if(b) showTrack(b);
+        if(a && a.bounds && b && b.bounds){
+          const combined = L.latLngBounds(a.bounds.getSouthWest(), a.bounds.getNorthEast()).extend(b.bounds);
+          map.fitBounds(combined, { padding:[40,40] });
+        } else if(a && a.bounds){
+          map.fitBounds(a.bounds, { padding:[40,40] });
+        } else if(b && b.bounds){
+          map.fitBounds(b.bounds, { padding:[40,40] });
+        }
+      });
+    });
+  }
+
+  /* ---------------- Point-by-point track analysis ---------------- */
+  // Heuristic quality checks — flags things that are *unusual*, not
+  // necessarily wrong. Thresholds are tuned for a walked field survey.
+  const SPEED_ANOMALY_KMH = 20;      // faster than plausible walking pace
+  const STRAIGHT_LINE_FACTOR = 6;    // segment vs. median segment length
+  const STRAIGHT_LINE_MIN_M = 15;    // ignore tiny tracks entirely
+
+  function median(nums){
+    if(nums.length === 0) return 0;
+    const s = [...nums].sort((a,b)=>a-b);
+    const mid = Math.floor(s.length/2);
+    return s.length % 2 ? s[mid] : (s[mid-1]+s[mid])/2;
+  }
+
+  function analyzeTrack(t){
+    const n = t.latlngs.length;
+    const points = t.latlngs.map((ll, i)=>{
+      let time = null;
+      if(t.times && t.times[i]){
+        const d = new Date(t.times[i]);
+        if(!isNaN(d.getTime())) time = d;
+      }
+      return { idx: i, lat: ll[0], lon: ll[1], time, ele: (t.eles ? t.eles[i] : null) };
+    });
+
+    // Per-segment metrics (segment i connects point i-1 -> point i)
+    const segDist = new Array(n).fill(0);   // meters
+    const segGap = new Array(n).fill(null); // seconds
+    const segSpeed = new Array(n).fill(null); // km/h
+    const segTimeOrderBad = new Array(n).fill(false);
+
+    for(let i=1;i<n;i++){
+      segDist[i] = haversineKm([points[i-1].lat,points[i-1].lon], [points[i].lat,points[i].lon]) * 1000;
+      if(points[i-1].time && points[i].time){
+        const gapSec = (points[i].time - points[i-1].time) / 1000;
+        segGap[i] = gapSec;
+        if(gapSec > 0) segSpeed[i] = (segDist[i] / gapSec) * 3.6;
+        if(gapSec <= 0) segTimeOrderBad[i] = true;
+      }
+    }
+
+    const distsForMedian = segDist.slice(1).filter(d=>d > 0);
+    const medianDist = median(distsForMedian);
+
+    const pointFlags = points.map(()=>[]); // array of {type, label} per point
+
+    for(let i=1;i<n;i++){
+      const flagsHere = [];
+      const isStraightLine = medianDist > 0 &&
+        segDist[i] > STRAIGHT_LINE_FACTOR * medianDist &&
+        segDist[i] > STRAIGHT_LINE_MIN_M;
+      const isSpeedAnomaly = segSpeed[i] != null && segSpeed[i] > SPEED_ANOMALY_KMH;
+
+      if(segTimeOrderBad[i]){
+        flagsHere.push({ type:'drift', label: 'Timestamp not increasing — check point order' });
+      }
+      if(isStraightLine){
+        flagsHere.push({ type:'drift', label: `Long straight segment (${Math.round(segDist[i])} m vs ~${Math.round(medianDist)} m typical) — possibly edited or skipped points` });
+      }
+      if(isSpeedAnomaly){
+        flagsHere.push({ type:'speed', label: `Speed ${segSpeed[i].toFixed(1)} km/h — too fast for a walked boundary` });
+      }
+      if(flagsHere.length){
+        pointFlags[i].push(...flagsHere);
+        pointFlags[i-1].push(...flagsHere.map(f=>({...f, label: f.label + ' (leading segment)'})));
+      }
+    }
+
+    points.forEach((p,i)=>{
+      if(p.time == null) pointFlags[i].push({ type:'time', label:'Missing timestamp' });
+      if(p.ele == null) pointFlags[i].push({ type:'time', label:'Missing elevation' });
+    });
+
+    // Segment color for the map: worst flag between its two endpoints wins.
+    const segColorClass = new Array(n).fill('normal');
+    for(let i=1;i<n;i++){
+      const hasDrift = segTimeOrderBad[i] || (medianDist > 0 && segDist[i] > STRAIGHT_LINE_FACTOR*medianDist && segDist[i] > STRAIGHT_LINE_MIN_M);
+      const hasSpeed = segSpeed[i] != null && segSpeed[i] > SPEED_ANOMALY_KMH;
+      const hasMissing = points[i-1].time==null || points[i].time==null || points[i-1].ele==null || points[i].ele==null;
+      if(hasDrift) segColorClass[i] = 'drift';
+      else if(hasSpeed) segColorClass[i] = 'speed';
+      else if(hasMissing) segColorClass[i] = 'missing';
+      else segColorClass[i] = 'normal';
+    }
+
+    const missingCount = points.filter(p => p.time==null || p.ele==null).length;
+    const flaggedIdx = [];
+    pointFlags.forEach((f,i)=>{ if(f.length) flaggedIdx.push(i); });
+    const timeOrderConsistent = !segTimeOrderBad.some(Boolean);
+
+    return {
+      points, segDist, segGap, segSpeed, segColorClass, pointFlags,
+      totalPoints: n, flaggedCount: flaggedIdx.length, flaggedIdx,
+      missingCount, timeOrderConsistent
+    };
+  }
+
+  function buildSparklinePath(eles, w, h){
+    const valid = eles.filter(e=>e!=null);
+    if(valid.length < 2) return null;
+    const min = Math.min(...valid), max = Math.max(...valid);
+    const range = (max-min) || 1;
+    const n = eles.length;
+    const pts = eles.map((e,i)=>{
+      const x = (i/(n-1)) * w;
+      const val = (e==null) ? min : e;
+      const y = h - ((val-min)/range) * h;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+    return pts.join(' ');
+  }
+
+  /* ---------------- GPX parsing ---------------- */
+  function parseGPX(text){
+    const xml = new DOMParser().parseFromString(text, 'application/xml');
+    const errNode = xml.querySelector('parsererror');
+    if(errNode) throw new Error('Invalid GPX / XML');
+
+    const nameNode = xml.querySelector('gpx > metadata > name, gpx > trk > name, gpx > name');
+    const gpxName = nameNode ? nameNode.textContent.trim() : null;
+
+    // Collect track segments (trk > trkseg > trkpt); fallback to rte, then wpt-only files
+    const segments = [];
+    const trksegs = xml.querySelectorAll('trkseg');
+    if(trksegs.length){
+      trksegs.forEach(seg=>{
+        const pts = [];
+        seg.querySelectorAll('trkpt').forEach(pt=>pts.push(pt));
+        if(pts.length) segments.push(pts);
+      });
+    } else {
+      const rtepts = xml.querySelectorAll('rtept');
+      if(rtepts.length) segments.push(Array.from(rtepts));
+    }
+
+    const latlngs = [];
+    const eles = [];
+    const times = [];
+    segments.forEach(seg=>{
+      seg.forEach(pt=>{
+        const lat = parseFloat(pt.getAttribute('lat'));
+        const lon = parseFloat(pt.getAttribute('lon'));
+        if(isNaN(lat) || isNaN(lon)) return;
+        latlngs.push([lat, lon]);
+        const eleNode = pt.querySelector('ele');
+        eles.push(eleNode ? parseFloat(eleNode.textContent) : null);
+        const timeNode = pt.querySelector('time');
+        times.push(timeNode ? timeNode.textContent.trim() : null);
+      });
+    });
+
+    // Date measured: prefer the first trkpt/rtept timestamp, fall back to
+    // <metadata><time>, since not every recorder writes per-point times.
+    let measuredDate = null;
+    const firstValidTime = times.find(t=>t);
+    if(firstValidTime){
+      const d = new Date(firstValidTime);
+      if(!isNaN(d.getTime())) measuredDate = d;
+    }
+    if(!measuredDate){
+      const metaTime = xml.querySelector('gpx > metadata > time');
+      if(metaTime){
+        const d = new Date(metaTime.textContent.trim());
+        if(!isNaN(d.getTime())) measuredDate = d;
+      }
+    }
+
+    // Waypoints
+    const waypoints = [];
+    xml.querySelectorAll('gpx > wpt').forEach(wpt=>{
+      const lat = parseFloat(wpt.getAttribute('lat'));
+      const lon = parseFloat(wpt.getAttribute('lon'));
+      if(isNaN(lat)||isNaN(lon)) return;
+      const nm = wpt.querySelector('name');
+      waypoints.push({ lat, lon, name: nm ? nm.textContent.trim() : 'Waypoint' });
+    });
+
+    return { name: gpxName, latlngs, eles, times, measuredDate, waypoints, segmentCount: segments.length };
+  }
+
+  function flagIcon(color){
+    return L.divIcon({
+      className: 'trailhead-icon',
+      html: `<svg width="20" height="26" viewBox="0 0 20 26" xmlns="http://www.w3.org/2000/svg">
+        <path d="M3 25V2" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
+        <path d="M3 3 L18 7 L3 12 Z" fill="${color}"/>
+      </svg>`,
+      iconSize:[20,26], iconAnchor:[3,25]
+    });
+  }
+  function dotIcon(color){
+    return L.divIcon({
+      className:'trailhead-icon',
+      html:`<svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="${color}" stroke="#12161d" stroke-width="2"/></svg>`,
+      iconSize:[14,14], iconAnchor:[7,7]
+    });
+  }
+
+  function addTrack(fileName, gpxData, opts = {}){
+    if(gpxData.latlngs.length < 2 && gpxData.waypoints.length === 0){
+      unplottableFiles.push(fileName);
+      if(!opts.silent) renderUnplottableFootnote();
+      return null;
+    }
+    const id = trackIdSeq++;
+    const color = nextColor();
+    const displayName = gpxData.name || fileName.replace(/\.gpx$/i,'');
+    const areaHa = computeArea(gpxData.latlngs);
+    const measuredDate = gpxData.measuredDate;
+    const layerGroup = L.layerGroup();
+
+    const popupHtml = `<div class="gpx-popup">
+        <b>${escapeHtml(displayName)}</b>
+        <div class="popup-file">${escapeHtml(fileName)}</div>
+        ${measuredDate ? `<div class="popup-date">Measured: <b>${fmtDate(measuredDate)}</b></div>` : ''}
+        ${areaHa != null ? `<div class="popup-area">Area: <b>${fmtHa(areaHa)}</b></div>` : ''}
+        <button class="popup-details-btn" onclick="window.openTrackDetails(${id})">View Point Analysis &rarr;</button>
+      </div>`;
+
+    let poly = null;
+    let fillPoly = null;
+    if(gpxData.latlngs.length >= 2){
+      // Closed parcels get a soft fill first (underneath the boundary line) so
+      // that two overlapping parcels visibly darken where their fills stack.
+      if(areaHa != null){
+        fillPoly = L.polygon(gpxData.latlngs, {
+          color: color, weight: 0, fillColor: color, fillOpacity: 0.12, interactive:false
+        }).bindPopup(popupHtml);
+        fillPoly.addTo(layerGroup);
+      }
+
+      poly = L.polyline(gpxData.latlngs, {
+        color: color, weight: 4, opacity: 0.85, lineJoin:'round'
+      }).bindPopup(popupHtml);
+      poly.addTo(layerGroup);
+
+      L.marker(gpxData.latlngs[0], { icon: flagIcon(color) })
+        .bindPopup(popupHtml)
+        .addTo(layerGroup);
+      L.marker(gpxData.latlngs[gpxData.latlngs.length-1], { icon: dotIcon('#c0604a') })
+        .bindPopup(popupHtml)
+        .addTo(layerGroup);
+    }
+
+    gpxData.waypoints.forEach(wp=>{
+      L.marker([wp.lat, wp.lon], { icon: dotIcon(color) })
+        .bindPopup(`<div class="gpx-popup">${escapeHtml(wp.name)}</div>`)
+        .addTo(layerGroup);
+    });
+
+    layerGroup.addTo(map);
+
+    const stats = computeStats(gpxData.latlngs, gpxData.eles);
+    const bounds = gpxData.latlngs.length >= 2 ? L.latLngBounds(gpxData.latlngs) : null;
+    // "Plottable" = the file actually produced something visible on the map
+    // (a track line, or at least a waypoint marker). A GPX with too few
+    // trackpoints and no waypoints has nothing to draw.
+    const plottable = gpxData.latlngs.length >= 2 || (gpxData.waypoints && gpxData.waypoints.length > 0);
+
+    tracks.set(id, {
+      id, name: displayName, fileName: fileName, color, layerGroup, latlngs: gpxData.latlngs,
+      eles: gpxData.eles, times: gpxData.times, stats, bounds, areaHa, measuredDate, visible: true,
+      poly, fillPoly, overlaps: [], plottable
+    });
+
+    renderTrackCard(id);
+    updateEmptyState();
+    applySearchFilter();
+    if(!opts.silent){
+      fitToAll();
+      recomputeOverlaps();
+      updateSummaryPanel();
+    }
+    return id;
+  }
+
+  function escapeHtml(s){
+    return s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function fmtKm(km){
+    const mi = km * 0.621371;
+    return `${km.toFixed(2)} km <span style="opacity:.55">(${mi.toFixed(2)} mi)</span>`;
+  }
+  function fmtM(m){
+    const ft = m * 3.28084;
+    return `${Math.round(m)} m <span style="opacity:.55">(${Math.round(ft)} ft)</span>`;
+  }
+  function fmtHa(ha){
+    const acres = ha * 2.47105;
+    const decimals = ha < 10 ? 3 : 2;
+    return `${ha.toFixed(decimals)} ha <span style="opacity:.55">(${acres.toFixed(decimals)} ac)</span>`;
+  }
+  function fmtDate(d){
+    return d.toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' }) +
+      ' · ' + d.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' });
+  }
+
+  function renderTrackCard(id){
+    const t = tracks.get(id);
+    const card = document.createElement('div');
+    card.className = 'track-card';
+    card.id = `card-${id}`;
+    card.dataset.search = `${t.name} ${t.fileName}`.toLowerCase();
+    card.style.setProperty('--track-color', t.color);
+
+    const sparkPath = t.eles && t.eles.some(e=>e!=null) ? buildSparklinePath(t.eles, 300, 30) : null;
+
+    let anomalyBadgeHtml = '';
+    if(t.latlngs.length >= 2){
+      const a = analyzeTrack(t);
+      const pct = a.totalPoints > 0 ? (a.flaggedCount / a.totalPoints) * 100 : 0;
+      t.flaggedCount = a.flaggedCount;
+      t.totalPointsAnalyzed = a.totalPoints;
+      t.flaggedPct = pct;
+      if(a.flaggedCount === 0){
+        anomalyBadgeHtml = `<div class="anomaly-badge clean">✓ No anomalies found</div>`;
+      } else {
+        const sevClass = pct > 15 ? 'bad' : 'warn';
+        anomalyBadgeHtml = `<div class="anomaly-badge ${sevClass}">⚠ ${pct.toFixed(0)}% of points flagged (${a.flaggedCount}/${a.totalPoints})</div>`;
+      }
+    }
+
+    card.innerHTML = `
+      <div class="track-card-top">
+        <div>
+          <div class="track-name">${escapeHtml(t.name)}</div>
+          <div class="track-filename">${escapeHtml(t.fileName)}</div>
+          ${t.measuredDate ? `<div class="track-date">${fmtDate(t.measuredDate)}</div>` : ''}
+        </div>
+        <div class="track-actions">
+          <button class="icon-btn details-btn" title="Point-by-point analysis" data-id="${id}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 17V9m6 8V5M3 21h18M5 21V13"/></svg>
+          </button>
+          <button class="icon-btn locate-btn" title="Zoom to this track" data-id="${id}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg>
+          </button>
+          <button class="icon-btn toggle-btn" title="Toggle visibility" data-id="${id}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+          <button class="icon-btn remove" title="Remove track" data-id="${id}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="track-stats">
+        <div>Dist <b>${fmtKm(t.stats.distanceKm)}</b></div>
+        <div>Gain <b>${fmtM(t.stats.gain)}</b></div>
+        <div>Pts <b>${t.latlngs.length}</b></div>
+      </div>
+      ${t.areaHa != null ? `<div class="track-area"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3V7z"/><path d="M9 4v13M15 7v13"/></svg> Enclosed area <b>${fmtHa(t.areaHa)}</b></div>` : ''}
+      ${anomalyBadgeHtml}
+      <div class="overlap-badge-slot" id="overlapBadge-${id}"></div>
+      ${sparkPath ? `<svg class="sparkline" width="100%" height="30" viewBox="0 0 300 30" preserveAspectRatio="none">
+        <polyline points="${sparkPath}" fill="none" stroke="${t.color}" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+      </svg>` : ''}
+    `;
+
+    card.addEventListener('click', (e)=>{
+      if(e.target.closest('.icon-btn')) return;
+      openTrackDetails(id);
+    });
+    card.querySelector('.locate-btn').addEventListener('click', (e)=>{
+      e.stopPropagation();
+      if(t.bounds) map.fitBounds(t.bounds, { padding:[40,40] });
+    });
+    card.querySelector('.details-btn').addEventListener('click', (e)=>{
+      e.stopPropagation();
+      openTrackDetails(id);
+    });
+    card.querySelector('.toggle-btn').addEventListener('click', (e)=>{
+      e.stopPropagation();
+      toggleTrack(id);
+    });
+    card.querySelector('.remove').addEventListener('click', (e)=>{
+      e.stopPropagation();
+      removeTrack(id);
+    });
+
+    trackListEl.appendChild(card);
+  }
+
+  function toggleTrack(id){
+    const t = tracks.get(id);
+    t.visible = !t.visible;
+    if(t.visible){ t.layerGroup.addTo(map); }
+    else { map.removeLayer(t.layerGroup); }
+    document.getElementById(`card-${id}`).classList.toggle('dimmed', !t.visible);
+  }
+
+  // Force a track to be visible (used when jumping to an overlap so the
+  // partner parcel is actually on screen, even if it had been hidden).
+  function showTrack(t){
+    if(!t || t.visible) return;
+    t.visible = true;
+    t.layerGroup.addTo(map);
+    const card = document.getElementById(`card-${t.id}`);
+    if(card) card.classList.remove('dimmed');
+  }
+
+  // Un-hides every parcel this track overlaps with and zooms out to fit all
+  // of them, so "overlapped with what?" always has a visible answer.
+  function revealOverlapGroup(id){
+    const t = tracks.get(id);
+    if(!t) return;
+    showTrack(t);
+    let combined = t.bounds ? L.latLngBounds(t.bounds.getSouthWest(), t.bounds.getNorthEast()) : null;
+    (t.overlaps || []).forEach(o=>{
+      const partner = tracks.get(o.id);
+      if(!partner) return;
+      showTrack(partner);
+      if(partner.bounds){
+        combined = combined ? combined.extend(partner.bounds) : L.latLngBounds(partner.bounds.getSouthWest(), partner.bounds.getNorthEast());
+      }
+    });
+    if(combined) map.fitBounds(combined, { padding:[40,40] });
+  }
+
+  function removeTrack(id){
+    const t = tracks.get(id);
+    map.removeLayer(t.layerGroup);
+    document.getElementById(`card-${id}`).remove();
+    tracks.delete(id);
+    updateEmptyState();
+    applySearchFilter();
+    fitToAll();
+    recomputeOverlaps();
+    updateSummaryPanel();
+  }
+
+  /* ---------------- Custom confirm modal (replaces native confirm()) ---------------- */
+  function showConfirm({ title = 'Are you sure?', body = '', okLabel = 'OK' } = {}){
+    return new Promise(resolve=>{
+      const overlay = document.getElementById('confirmModalOverlay');
+      document.getElementById('confirmModalTitle').textContent = title;
+      document.getElementById('confirmModalBody').textContent = body;
+      const okBtn = document.getElementById('confirmModalOk');
+      const cancelBtn = document.getElementById('confirmModalCancel');
+      okBtn.textContent = okLabel;
+
+      overlay.style.display = 'flex';
+
+      function cleanup(result){
+        overlay.style.display = 'none';
+        okBtn.removeEventListener('click', onOk);
+        cancelBtn.removeEventListener('click', onCancel);
+        overlay.removeEventListener('click', onOverlay);
+        document.removeEventListener('keydown', onKey);
+        resolve(result);
+      }
+      function onOk(){ cleanup(true); }
+      function onCancel(){ cleanup(false); }
+      function onOverlay(e){ if(e.target === overlay) cleanup(false); }
+      function onKey(e){ if(e.key === 'Escape') cleanup(false); }
+
+      okBtn.addEventListener('click', onOk);
+      cancelBtn.addEventListener('click', onCancel);
+      overlay.addEventListener('click', onOverlay);
+      document.addEventListener('keydown', onKey);
+    });
+  }
+
+  async function removeAllTracks(){
+    if(tracks.size === 0) return;
+    const count = tracks.size;
+    const ok = await showConfirm({
+      title: 'Remove all files?',
+      body: `Remove all ${count} loaded GPX file${count === 1 ? '' : 's'}? This can't be undone.`,
+      okLabel: 'Remove All'
+    });
+    if(!ok) return;
+
+    tracks.forEach(t => map.removeLayer(t.layerGroup));
+    tracks.clear();
+    unplottableFiles = [];
+    trackListEl.innerHTML = `<div class="empty-state" id="emptyState">No tracks loaded yet.<br>Your trails will appear here with distance and elevation stats.</div>`;
+
+    // Re-grab the empty state element since we just replaced it.
+    const newEmptyState = document.getElementById('emptyState');
+    emptyStateEl = newEmptyState;
+
+    searchInput.value = '';
+    updateEmptyState();
+    applySearchFilter();
+    recomputeOverlaps();
+    updateSummaryPanel();
+    map.setView([20, 0], 3);
+  }
+
+  document.getElementById('removeAllBtn').addEventListener('click', removeAllTracks);
+
+  /* ---------------- Track detail modal ---------------- */
+  let detailMapInstance = null;
+  let detailLayerGroup = null;
+  let detailCurrentBase = 'sat';
+  const detailBaseLayers = {
+    osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+    }),
+    topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+      maxZoom: 17, attribution: 'Map data: &copy; OpenStreetMap contributors, SRTM | Map style: &copy; OpenTopoMap (CC-BY-SA)'
+    }),
+    sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19, maxNativeZoom: 17, attribution: 'Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics'
+    })
+  };
+
+  const SEG_COLORS = {
+    normal: '#3ec98a',
+    drift: '#c0604a',
+    speed: '#e0a15c',
+    missing: '#8a93a3'
+  };
+
+  function fmtTimeShort(d){
+    if(!d) return '—';
+    return d.toLocaleDateString(undefined, { month:'short', day:'numeric' }) +
+      ' ' + d.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  }
+
+  function renderDetailModal(id){
+    const t = tracks.get(id);
+    const a = analyzeTrack(t);
+
+    document.getElementById('detailTrackName').textContent = t.name;
+    document.getElementById('detailTrackFile').textContent = t.fileName;
+
+    const orderVal = a.timeOrderConsistent ? 'Yes' : 'No';
+    const orderClass = a.timeOrderConsistent ? 'good' : 'bad';
+    const flaggedClass = a.flaggedCount === 0 ? 'good' : (a.flaggedCount > a.totalPoints*0.15 ? 'bad' : 'warn');
+    const missingClass = a.missingCount === 0 ? 'good' : 'warn';
+
+    const overlapCount = (t.overlaps || []).length;
+    const overlapClass = overlapCount > 0 ? 'bad' : 'good';
+    const overlapSub = overlapCount > 0
+      ? `${(t.overlaps.reduce((s,o)=>s+o.areaHa,0)).toFixed(3)} ha shared — click to view`
+      : 'No overlapping parcels';
+
+    document.getElementById('detailStatRow').innerHTML = `
+      <div class="detail-stat">
+        <div class="detail-stat-label">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="5" cy="7" r="1.5" fill="currentColor" stroke="none"/><circle cx="19" cy="7" r="1.5" fill="currentColor" stroke="none"/><circle cx="5" cy="17" r="1.5" fill="currentColor" stroke="none"/><circle cx="19" cy="17" r="1.5" fill="currentColor" stroke="none"/></svg>
+          Total Points
+        </div>
+        <div class="detail-stat-value">${a.totalPoints}</div>
+      </div>
+      <div class="detail-stat">
+        <div class="detail-stat-label">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 16H3l9-16z"/><path d="M12 10v4"/><circle cx="12" cy="17.2" r="0.4" fill="currentColor" stroke="none"/></svg>
+          Flagged Points
+        </div>
+        <div class="detail-stat-value ${flaggedClass}">${a.flaggedCount}</div>
+      </div>
+      <div class="detail-stat">
+        <div class="detail-stat-label">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/><path d="M4 4l2 2M20 4l-2 2" opacity="0.5"/></svg>
+          Missing Time/Elev.
+        </div>
+        <div class="detail-stat-value ${missingClass}">${a.missingCount}</div>
+      </div>
+      <div class="detail-stat">
+        <div class="detail-stat-label">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Time Order Consistent
+        </div>
+        <div class="detail-stat-value ${orderClass}">${orderVal}</div>
+      </div>
+      <div class="detail-stat ${overlapCount > 0 ? 'clickable' : ''}" id="detailOverlapStat" title="${overlapCount > 0 ? 'Click to reveal the overlapping parcel(s)' : ''}">
+        <div class="detail-stat-label">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="6"/><circle cx="15" cy="15" r="6"/></svg>
+          Overlaps
+        </div>
+        <div class="detail-stat-value ${overlapClass}">${overlapCount}</div>
+        <div class="detail-stat-sub">${overlapSub}</div>
+      </div>
+    `;
+
+    if(overlapCount > 0){
+      const overlapTile = document.getElementById('detailOverlapStat');
+      if(overlapTile){
+        overlapTile.addEventListener('click', ()=>{
+          closeTrackDetails();
+          setTimeout(()=> revealOverlapGroup(id), 10);
+        });
+      }
+    }
+
+    document.getElementById('detailLegend').innerHTML = `
+      <div class="detail-legend-item"><span class="detail-legend-swatch" style="background:${SEG_COLORS.normal}"></span>Recorded track (normal)</div>
+      <div class="detail-legend-item"><span class="detail-legend-swatch" style="background:${SEG_COLORS.drift}"></span>Straight-line / edited segment</div>
+      <div class="detail-legend-item"><span class="detail-legend-swatch" style="background:${SEG_COLORS.speed}"></span>Speed anomaly</div>
+      <div class="detail-legend-item"><span class="detail-legend-swatch" style="background:${SEG_COLORS.missing}"></span>Missing time or elevation</div>
+    `;
+
+    // Flagged points table
+    const flaggedTable = document.getElementById('detailFlaggedTable');
+    if(a.flaggedIdx.length === 0){
+      flaggedTable.innerHTML = `<tbody><tr><td colspan="6" class="detail-empty-note">No anomalies detected — every point looks consistent.</td></tr></tbody>`;
+    } else {
+      const rows = a.flaggedIdx.map(i=>{
+        const p = a.points[i];
+        const badges = a.pointFlags[i].map(f=>`<span class="detail-badge ${f.type}">${escapeHtml(f.label)}</span>`).join(' ');
+        const speed = a.segSpeed[i] != null ? a.segSpeed[i].toFixed(1)+' km/h' : '—';
+        return `<tr>
+          <td>${i}</td>
+          <td>${p.lat.toFixed(5)}</td>
+          <td>${p.lon.toFixed(5)}</td>
+          <td>${fmtTimeShort(p.time)}</td>
+          <td>${speed}</td>
+          <td class="detail-note">${badges}</td>
+        </tr>`;
+      }).join('');
+      flaggedTable.innerHTML = `
+        <thead><tr><th>#</th><th>Lat</th><th>Lon</th><th>Time</th><th>Speed</th><th>Flag</th></tr></thead>
+        <tbody>${rows}</tbody>`;
+    }
+
+    // All points table (capped for performance/render sanity)
+    const CAP = 1500;
+    const allTable = document.getElementById('detailAllTable');
+    const rowsAll = a.points.slice(0, CAP).map((p,i)=>{
+      const gap = a.segGap[i] != null ? a.segGap[i].toFixed(0)+'s' : '—';
+      const speed = a.segSpeed[i] != null ? a.segSpeed[i].toFixed(1)+' km/h' : '—';
+      return `<tr>
+        <td>${i}</td>
+        <td>${p.lat.toFixed(5)}</td>
+        <td>${p.lon.toFixed(5)}</td>
+        <td>${fmtTimeShort(p.time)}</td>
+        <td>${gap}</td>
+        <td>${speed}</td>
+      </tr>`;
+    }).join('');
+    allTable.innerHTML = `
+      <thead><tr><th>#</th><th>Lat</th><th>Lon</th><th>Time</th><th>Gap</th><th>Speed</th></tr></thead>
+      <tbody>${rowsAll}</tbody>`;
+    const existingNote = document.getElementById('detailAllTruncNote');
+    if(existingNote) existingNote.remove();
+    if(a.points.length > CAP){
+      allTable.insertAdjacentHTML('afterend', `<div class="detail-empty-note" id="detailAllTruncNote">Showing first ${CAP} of ${a.points.length} points.</div>`);
+    }
+
+    // Mini map with colored segments
+    if(!detailMapInstance){
+      detailMapInstance = L.map('detailTrackMap', { zoomControl:true, attributionControl:false, scrollWheelZoom:true });
+      detailBaseLayers[detailCurrentBase].addTo(detailMapInstance);
+    }
+    if(detailLayerGroup) detailMapInstance.removeLayer(detailLayerGroup);
+    detailLayerGroup = L.layerGroup().addTo(detailMapInstance);
+
+    for(let i=1;i<a.points.length;i++){
+      const cls = a.segColorClass[i];
+      const p1 = a.points[i-1], p2 = a.points[i];
+      L.polyline([[p1.lat,p1.lon],[p2.lat,p2.lon]], {
+        color: SEG_COLORS[cls],
+        weight: 4,
+        opacity: 0.9,
+        dashArray: cls === 'missing' ? '5,5' : null
+      }).addTo(detailLayerGroup);
+    }
+    if(a.points.length){
+      L.marker([a.points[0].lat, a.points[0].lon], { icon: flagIcon(t.color) }).addTo(detailLayerGroup);
+      const last = a.points[a.points.length-1];
+      L.marker([last.lat, last.lon], { icon: dotIcon('#c0604a') }).addTo(detailLayerGroup);
+    }
+  }
+
+  document.getElementById('detailMapLayers').addEventListener('click', (e)=>{
+    const btn = e.target.closest('.detail-layer-btn');
+    if(!btn || !detailMapInstance) return;
+    const key = btn.dataset.layer;
+    if(key === detailCurrentBase) return;
+    detailMapInstance.removeLayer(detailBaseLayers[detailCurrentBase]);
+    detailBaseLayers[key].addTo(detailMapInstance);
+    detailCurrentBase = key;
+    document.querySelectorAll('.detail-layer-btn').forEach(b=>b.classList.toggle('active', b === btn));
+  });
+
+  document.getElementById('detailMapLayersToggle').addEventListener('click', (e)=>{
+    e.stopPropagation();
+    document.getElementById('detailMapLayers').classList.toggle('collapsed');
+  });
+
+  let currentDetailId = null;
+
+  // Only tracks with enough points to actually open in this modal are
+  // navigable — skips anything that would immediately bounce back out.
+  function getNavigableTrackIds(){
+    return Array.from(tracks.values())
+      .filter(t => t.latlngs && t.latlngs.length >= 2)
+      .map(t => t.id);
+  }
+
+  function updateDetailNav(id){
+    const ids = getNavigableTrackIds();
+    const idx = ids.indexOf(id);
+    const posEl = document.getElementById('detailNavPos');
+    const prevBtn = document.getElementById('detailPrevBtn');
+    const nextBtn = document.getElementById('detailNextBtn');
+    if(posEl) posEl.textContent = ids.length > 0 ? `${idx+1} / ${ids.length}` : '0 / 0';
+    if(prevBtn) prevBtn.disabled = idx <= 0;
+    if(nextBtn) nextBtn.disabled = idx === -1 || idx >= ids.length - 1;
+  }
+
+  function navigateDetail(delta){
+    const ids = getNavigableTrackIds();
+    const idx = ids.indexOf(currentDetailId);
+    if(idx === -1) return;
+    const newIdx = idx + delta;
+    if(newIdx < 0 || newIdx >= ids.length) return;
+    openTrackDetails(ids[newIdx]);
+  }
+
+  function openTrackDetails(id){
+    const t = tracks.get(id);
+    if(!t || !t.latlngs || t.latlngs.length < 2){
+      alert('Not enough GPS points in this track to analyze.');
+      return;
+    }
+    currentDetailId = id;
+    renderDetailModal(id);
+    updateDetailNav(id);
+    const overlay = document.getElementById('detailModalOverlay');
+    overlay.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    setTimeout(()=>{
+      if(detailMapInstance){
+        detailMapInstance.invalidateSize();
+        if(t.bounds) detailMapInstance.fitBounds(t.bounds, { padding:[16,16] });
+      }
+    }, 60);
+  }
+  window.openTrackDetails = openTrackDetails;
+
+  function closeTrackDetails(){
+    document.getElementById('detailModalOverlay').style.display = 'none';
+    document.body.style.overflow = '';
+    currentDetailId = null;
+  }
+
+  document.getElementById('detailPrevBtn').addEventListener('click', ()=> navigateDetail(-1));
+  document.getElementById('detailNextBtn').addEventListener('click', ()=> navigateDetail(1));
+
+  document.getElementById('detailModalClose').addEventListener('click', closeTrackDetails);
+  document.getElementById('detailModalOverlay').addEventListener('click', (e)=>{
+    if(e.target.id === 'detailModalOverlay') closeTrackDetails();
+  });
+  document.addEventListener('keydown', (e)=>{
+    if(e.key === 'Escape'){ closeTrackDetails(); return; }
+    if(document.getElementById('detailModalOverlay').style.display !== 'flex') return;
+    if(e.key === 'ArrowRight') navigateDetail(1);
+    if(e.key === 'ArrowLeft') navigateDetail(-1);
+  });
+
+  function fitToAll(){
+    const allBounds = [];
+    tracks.forEach(t=>{ if(t.visible && t.bounds) allBounds.push(t.bounds); });
+    if(allBounds.length === 0) return;
+    let combined = allBounds[0];
+    allBounds.slice(1).forEach(b=>combined.extend(b));
+    map.fitBounds(combined, { padding:[30,30] });
+  }
+
+  /* ---------------- File handling ---------------- */
+  function readFileAsText(file){
+    return new Promise((resolve, reject)=>{
+      const reader = new FileReader();
+      reader.onload = (e)=> resolve(e.target.result);
+      reader.onerror = ()=> reject(new Error('Could not read the file'));
+      reader.readAsText(file);
+    });
+  }
+
+  const loadingOverlay = document.getElementById('loadingOverlay');
+  const loadingSub = document.getElementById('loadingSub');
+  const loadingBarFill = document.getElementById('loadingBarFill');
+  const loadingCount = document.getElementById('loadingCount');
+
+  function showLoadingOverlay(total){
+    loadingBarFill.style.width = '0%';
+    loadingCount.textContent = `0 / ${total}`;
+    loadingSub.textContent = 'Reading track data…';
+    loadingOverlay.style.display = 'flex';
+  }
+  function updateLoadingProgress(current, total, fileName){
+    const pct = total > 0 ? (current / total) * 100 : 0;
+    loadingBarFill.style.width = `${pct}%`;
+    loadingCount.textContent = `${current} / ${total}`;
+    loadingSub.textContent = fileName;
+  }
+  function hideLoadingOverlay(){
+    loadingOverlay.style.display = 'none';
+  }
+
+  // Yields to the browser's paint/event loop so progress updates and the
+  // spinner are actually visible before the next (synchronous, potentially
+  // heavy) parse/render step runs.
+  function nextFrame(){
+    return new Promise(resolve => requestAnimationFrame(()=> setTimeout(resolve, 0)));
+  }
+
+  async function handleFiles(fileList){
+    const files = Array.from(fileList).filter(f=>/\.gpx$/i.test(f.name));
+    if(files.length === 0){
+      alert('Please select .gpx files.');
+      return;
+    }
+
+    showLoadingOverlay(files.length);
+    await nextFrame();
+
+    const errors = [];
+    for(let i=0;i<files.length;i++){
+      const file = files[i];
+      updateLoadingProgress(i, files.length, `Parsing ${file.name}…`);
+      await nextFrame();
+      try{
+        const text = await readFileAsText(file);
+        const gpxData = parseGPX(text);
+        addTrack(file.name, gpxData, { silent: true });
+      }catch(err){
+        errors.push(`"${file.name}": ${err.message}`);
+      }
+      updateLoadingProgress(i+1, files.length, file.name);
+    }
+
+    loadingSub.textContent = files.length > 1 ? 'Checking for parcel overlaps…' : 'Finishing up…';
+    await nextFrame();
+
+    fitToAll();
+    recomputeOverlaps();
+    updateSummaryPanel();
+    hideLoadingOverlay();
+
+    if(errors.length){
+      alert(`Some files couldn't be loaded:\n\n${errors.join('\n')}`);
+    }
+  }
+
+  let chartMetric = 'count'; // 'count' or 'area'
+  let selectedYear = null; // drives the Monthly Breakdown chart below
+
+  // Aggregate every track's measured year, not just this/last year.
+  function getByYearMap(){
+    const byYear = new Map();
+    tracks.forEach(t=>{
+      if(!t.measuredDate) return;
+      const y = t.measuredDate.getFullYear();
+      const entry = byYear.get(y) || { count: 0, area: 0 };
+      entry.count += 1;
+      entry.area += (t.areaHa || 0);
+      byYear.set(y, entry);
+    });
+    return byYear;
+  }
+
+  function renderYearChart(){
+    const el = document.getElementById('yearChart');
+    document.getElementById('yearChartTitle').textContent =
+      chartMetric === 'count' ? 'Files by Year' : 'Area (ha) by Year';
+
+    const byYear = getByYearMap();
+    const years = Array.from(byYear.keys()).sort((a,b)=>a-b);
+    if(years.length === 0){
+      el.innerHTML = `<div class="chart-empty">No dated uploads yet — the chart fills in once GPX timestamps are available.</div>`;
+      selectedYear = null;
+      renderMonthChart();
+      return;
+    }
+
+    // Keep the current selection if it's still valid, otherwise default to
+    // the most recent year with data.
+    if(selectedYear == null || !years.includes(selectedYear)){
+      selectedYear = years[years.length - 1];
+    }
+
+    const values = years.map(y => chartMetric === 'count' ? byYear.get(y).count : byYear.get(y).area);
+    const maxVal = Math.max(...values, 0.0001);
+
+    const w = 236, h = 96, padBottom = 18, padTop = 14;
+    const plotH = h - padBottom - padTop;
+    const n = years.length;
+    const gap = 10;
+    const barW = Math.max(14, Math.min(34, (w - gap*(n-1)) / n));
+    const totalBarsW = barW*n + gap*(n-1);
+    const startX = (w - totalBarsW) / 2;
+
+    let bars = '';
+    years.forEach((y, i)=>{
+      const v = values[i];
+      const barH = maxVal > 0 ? (v / maxVal) * plotH : 0;
+      const x = startX + i*(barW+gap);
+      const yTop = padTop + (plotH - barH);
+      const label = chartMetric === 'count' ? v : v.toFixed(2);
+      const isSelected = y === selectedYear;
+      const rectClass = `chart-bar-rect clickable${isSelected ? ' selected' : ''}${years.length > 1 && !isSelected ? ' dim' : ''}`;
+      // A generous invisible hit-target sits behind each bar so picking a
+      // tiny/near-zero year (like "1 file") is just as easy as a tall one.
+      bars += `
+        <rect x="${x.toFixed(1)}" y="${padTop.toFixed(1)}" width="${barW}" height="${plotH.toFixed(1)}"
+          fill="transparent" class="chart-bar-hit" data-year="${y}"></rect>
+        <rect x="${x.toFixed(1)}" y="${yTop.toFixed(1)}" width="${barW}" height="${Math.max(barH,2).toFixed(1)}"
+          rx="3" class="${rectClass}" data-year="${y}" style="pointer-events:none;"></rect>
+        <text class="chart-bar-value" x="${(x+barW/2).toFixed(1)}" y="${(yTop-5).toFixed(1)}" text-anchor="middle">${label}</text>
+        <text class="chart-bar-label" x="${(x+barW/2).toFixed(1)}" y="${h-4}" text-anchor="middle">${y}</text>
+      `;
+    });
+
+    el.innerHTML = `<svg width="100%" height="${h}" viewBox="0 0 ${w} ${h}">
+        <line x1="0" y1="${padTop+plotH}" x2="${w}" y2="${padTop+plotH}" class="chart-axis-line"/>
+        ${bars}
+      </svg>`;
+
+    el.querySelectorAll('.chart-bar-hit[data-year]').forEach(rect=>{
+      rect.style.cursor = 'pointer';
+      rect.addEventListener('click', ()=>{
+        selectedYear = parseInt(rect.dataset.year, 10);
+        renderYearChart();
+      });
+    });
+
+    renderMonthChart();
+  }
+
+  const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  function renderMonthChart(){
+    const el = document.getElementById('monthChart');
+    const titleEl = document.getElementById('monthChartTitle');
+    const yearToggleEl = document.getElementById('monthYearToggle');
+
+    const byYear = getByYearMap();
+    const years = Array.from(byYear.keys()).sort((a,b)=>a-b);
+
+    if(years.length === 0){
+      yearToggleEl.innerHTML = '';
+      titleEl.textContent = 'Monthly Breakdown';
+      el.innerHTML = `<div class="chart-empty">Select a year above to see its monthly breakdown.</div>`;
+      return;
+    }
+
+    if(selectedYear == null || !years.includes(selectedYear)){
+      selectedYear = years[years.length - 1];
+    }
+
+    // Explicit year pills so every year — even one with a single tiny
+    // upload — is just as easy to pick as the most recent one.
+    yearToggleEl.innerHTML = years.map(y =>
+      `<button class="chart-metric-btn${y === selectedYear ? ' active' : ''}" data-year="${y}">${y}</button>`
+    ).join('');
+    yearToggleEl.querySelectorAll('button[data-year]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        selectedYear = parseInt(btn.dataset.year, 10);
+        renderYearChart();
+      });
+    });
+
+    titleEl.textContent = chartMetric === 'count'
+      ? `Monthly Breakdown — ${selectedYear}`
+      : `Monthly Area (ha) — ${selectedYear}`;
+
+    const byMonth = Array.from({length:12}, ()=>({ count:0, area:0 }));
+    tracks.forEach(t=>{
+      if(!t.measuredDate || t.measuredDate.getFullYear() !== selectedYear) return;
+      const m = t.measuredDate.getMonth();
+      byMonth[m].count += 1;
+      byMonth[m].area += (t.areaHa || 0);
+    });
+
+    const values = byMonth.map(m => chartMetric === 'count' ? m.count : m.area);
+    const maxVal = Math.max(...values, 0.0001);
+    const hasAny = values.some(v => v > 0);
+
+    if(!hasAny){
+      el.innerHTML = `<div class="chart-empty">No dated uploads in ${selectedYear}.</div>`;
+      return;
+    }
+
+    const w = 236, h = 96, padBottom = 18, padTop = 14;
+    const plotH = h - padBottom - padTop;
+    const n = 12;
+    const gap = 3;
+    const barW = (w - gap*(n-1)) / n;
+
+    let bars = '';
+    for(let i=0;i<12;i++){
+      const v = values[i];
+      const barH = v > 0 ? Math.max((v / maxVal) * plotH, 2) : 0;
+      const x = i*(barW+gap);
+      const yTop = padTop + (plotH - barH);
+      const label = v === 0 ? '' : (chartMetric === 'count' ? v : v.toFixed(2));
+      bars += `
+        <rect x="${x.toFixed(1)}" y="${yTop.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}"
+          rx="2" class="chart-bar-rect"></rect>
+        ${label ? `<text class="chart-bar-value" x="${(x+barW/2).toFixed(1)}" y="${(yTop-5).toFixed(1)}" text-anchor="middle" font-size="8">${label}</text>` : ''}
+        <text class="chart-bar-label" x="${(x+barW/2).toFixed(1)}" y="${h-4}" text-anchor="middle">${MONTH_LABELS[i]}</text>
+      `;
+    }
+
+    el.innerHTML = `<svg width="100%" height="${h}" viewBox="0 0 ${w} ${h}">
+        <line x1="0" y1="${padTop+plotH}" x2="${w}" y2="${padTop+plotH}" class="chart-axis-line"/>
+        ${bars}
+      </svg>`;
+  }
+
+  document.getElementById('chartMetricToggle').addEventListener('click', (e)=>{
+    const btn = e.target.closest('.chart-metric-btn');
+    if(!btn) return;
+    chartMetric = btn.dataset.metric;
+    document.querySelectorAll('#chartMetricToggle .chart-metric-btn').forEach(b=>b.classList.toggle('active', b === btn));
+    renderYearChart();
+  });
+
+  let overlapThresholdPct = 20;
+  document.getElementById('overlapThresholdToggle').addEventListener('click', (e)=>{
+    const btn = e.target.closest('.chart-metric-btn');
+    if(!btn) return;
+    overlapThresholdPct = btn.dataset.pct === 'off' ? 'off' : parseFloat(btn.dataset.pct);
+    document.querySelectorAll('#overlapThresholdToggle .chart-metric-btn').forEach(b=>b.classList.toggle('active', b === btn));
+    recomputeOverlaps();
+  });
+
+  // Lists any loaded files that produced nothing visible on the map (no
+  // track line, no waypoints) at the bottom of the Details panel. Stays
+  // blank/hidden whenever every loaded file plotted successfully.
+  function renderUnplottableFootnote(){
+    const el = document.getElementById('unplottableFootnote');
+    if(!el) return;
+    if(unplottableFiles.length === 0){
+      el.style.display = 'none';
+      el.innerHTML = '';
+      return;
+    }
+    el.style.display = 'block';
+    el.innerHTML = `
+      <div class="summary-footnote-title">No Plottable Points <span class="footnote-count-badge">${unplottableFiles.length}</span></div>
+      <ul class="summary-footnote-list">
+        ${unplottableFiles.map(name => `<li>${escapeHtml(name)} — no usable track points or waypoints</li>`).join('')}
+      </ul>
+    `;
+  }
+
+  function updateSummaryPanel(){
+    let totalArea = 0;
+    let currentYearCount = 0;
+    let lastYearCount = 0;
+    const now = new Date();
+    const curY = now.getFullYear();
+
+    let flaggedArea = 0;
+    let flaggedFiles = 0;
+    let flaggedCurrentYearCount = 0;
+    let flaggedLastYearCount = 0;
+
+    let cleanArea = 0;
+    let cleanFiles = 0;
+    let cleanCurrentYearCount = 0;
+    let cleanLastYearCount = 0;
+
+    tracks.forEach(t=>{
+      if(t.areaHa != null) totalArea += t.areaHa;
+      if(t.measuredDate){
+        const y = t.measuredDate.getFullYear();
+        if(y === curY) currentYearCount++;
+        else if(y === curY - 1) lastYearCount++;
+      }
+
+      if(t.flaggedCount > 0){
+        flaggedFiles++;
+        if(t.areaHa != null) flaggedArea += t.areaHa;
+        if(t.measuredDate){
+          const y = t.measuredDate.getFullYear();
+          if(y === curY) flaggedCurrentYearCount++;
+          else if(y === curY - 1) flaggedLastYearCount++;
+        }
+      } else if(t.flaggedCount === 0 && t.totalPointsAnalyzed > 0){
+        // Only counts as "clean" once analysis actually ran and found zero flags.
+        cleanFiles++;
+        if(t.areaHa != null) cleanArea += t.areaHa;
+        if(t.measuredDate){
+          const y = t.measuredDate.getFullYear();
+          if(y === curY) cleanCurrentYearCount++;
+          else if(y === curY - 1) cleanLastYearCount++;
+        }
+      }
+    });
+
+    document.getElementById('statTotalArea').innerHTML = `${totalArea.toFixed(3)} <span>ha</span>`;
+    document.getElementById('statTotalFiles').textContent = tracks.size;
+    document.getElementById('statCurrentYear').textContent = currentYearCount;
+    document.getElementById('statLastYear').textContent = lastYearCount;
+    document.getElementById('statCurrentYearLabel').textContent = `${curY} Uploads`;
+    document.getElementById('statLastYearLabel').textContent = `${curY - 1} Uploads`;
+
+    // Only show a year's tile when that year actually has uploads.
+    document.getElementById('statCurrentYearTile').style.display = currentYearCount > 0 ? 'block' : 'none';
+    document.getElementById('statLastYearTile').style.display = lastYearCount > 0 ? 'block' : 'none';
+
+    document.getElementById('statFlaggedArea').innerHTML = `${flaggedArea.toFixed(3)} <span>ha</span>`;
+    document.getElementById('statFlaggedFiles').textContent = flaggedFiles;
+    const flaggedBadge = document.getElementById('flaggedTabBadge');
+    flaggedBadge.textContent = flaggedFiles > 99 ? '99+' : flaggedFiles;
+    flaggedBadge.style.display = flaggedFiles > 0 ? 'flex' : 'none';
+    document.getElementById('statFlaggedCurrentYear').textContent = flaggedCurrentYearCount;
+    document.getElementById('statFlaggedLastYear').textContent = flaggedLastYearCount;
+    document.getElementById('statFlaggedCurrentYearLabel').textContent = `${curY} Flagged`;
+    document.getElementById('statFlaggedLastYearLabel').textContent = `${curY - 1} Flagged`;
+    document.getElementById('statFlaggedCurrentYearTile').style.display = flaggedCurrentYearCount > 0 ? 'block' : 'none';
+    document.getElementById('statFlaggedLastYearTile').style.display = flaggedLastYearCount > 0 ? 'block' : 'none';
+
+    document.getElementById('statCleanArea').innerHTML = `${cleanArea.toFixed(3)} <span>ha</span>`;
+    document.getElementById('statCleanFiles').textContent = cleanFiles;
+    const cleanBadge = document.getElementById('cleanTabBadge');
+    cleanBadge.textContent = cleanFiles > 99 ? '99+' : cleanFiles;
+    cleanBadge.style.display = cleanFiles > 0 ? 'flex' : 'none';
+    document.getElementById('statCleanCurrentYear').textContent = cleanCurrentYearCount;
+    document.getElementById('statCleanLastYear').textContent = cleanLastYearCount;
+    document.getElementById('statCleanCurrentYearLabel').textContent = `${curY} Clean`;
+    document.getElementById('statCleanLastYearLabel').textContent = `${curY - 1} Clean`;
+    document.getElementById('statCleanCurrentYearTile').style.display = cleanCurrentYearCount > 0 ? 'block' : 'none';
+    document.getElementById('statCleanLastYearTile').style.display = cleanLastYearCount > 0 ? 'block' : 'none';
+
+    renderYearChart();
+    renderFlaggedRanking();
+    renderCleanRanking();
+    renderUnplottableFootnote();
+  }
+
+  function switchSummaryTab(tab){
+    document.querySelectorAll('.summary-tab').forEach(b=>b.classList.toggle('active', b.dataset.tab === tab));
+    document.getElementById('paneStats').style.display = tab === 'stats' ? 'block' : 'none';
+    document.getElementById('paneFlagged').style.display = tab === 'flagged' ? 'block' : 'none';
+    document.getElementById('paneOverlaps').style.display = tab === 'overlaps' ? 'block' : 'none';
+    document.getElementById('paneClean').style.display = tab === 'clean' ? 'block' : 'none';
+  }
+  document.querySelectorAll('.summary-tab').forEach(btn=>{
+    btn.addEventListener('click', ()=> switchSummaryTab(btn.dataset.tab));
+  });
+
+  function renderFlaggedRanking(){
+    const listEl = document.getElementById('flaggedRankList');
+    const ranked = Array.from(tracks.values())
+      .filter(t => t.flaggedPct != null && t.flaggedCount > 0)
+      .sort((a,b) => b.flaggedPct - a.flaggedPct);
+
+    if(ranked.length === 0){
+      listEl.innerHTML = `<div class="summary-empty">No flagged tracks — everything loaded so far looks clean.</div>`;
+      return;
+    }
+
+    listEl.innerHTML = ranked.map((t, i)=>{
+      const pctClass = t.flaggedPct > 15 ? 'bad' : 'warn';
+      return `<div class="flagged-rank-item" data-id="${t.id}">
+        <div class="flagged-rank-num">${i+1}</div>
+        <div class="flagged-rank-info">
+          <div class="flagged-rank-name">${escapeHtml(t.name)}</div>
+          <div class="flagged-rank-sub">${t.flaggedCount}/${t.totalPointsAnalyzed} points flagged</div>
+        </div>
+        <div class="flagged-rank-pct ${pctClass}">${t.flaggedPct.toFixed(0)}%</div>
+      </div>`;
+    }).join('');
+
+    listEl.querySelectorAll('.flagged-rank-item').forEach(item=>{
+      item.addEventListener('click', ()=>{
+        const id = parseInt(item.dataset.id, 10);
+        openTrackDetails(id);
+      });
+    });
+  }
+
+  function renderCleanRanking(){
+    const listEl = document.getElementById('cleanRankList');
+    const ranked = Array.from(tracks.values())
+      .filter(t => t.flaggedCount === 0 && t.totalPointsAnalyzed > 0)
+      .sort((a,b) => (b.areaHa || 0) - (a.areaHa || 0));
+
+    if(ranked.length === 0){
+      listEl.innerHTML = `<div class="summary-empty">No clean tracks yet — every analyzed track loaded so far has at least one flagged point.</div>`;
+      return;
+    }
+
+    listEl.innerHTML = ranked.map((t, i)=>{
+      const areaLabel = t.areaHa != null
+        ? `${t.areaHa.toFixed(3)}<span style="font-size:9px;"> ha</span>`
+        : `${t.totalPointsAnalyzed}<span style="font-size:9px;"> pts</span>`;
+      return `<div class="flagged-rank-item" data-id="${t.id}">
+        <div class="flagged-rank-num">${i+1}</div>
+        <div class="flagged-rank-info">
+          <div class="flagged-rank-name">${escapeHtml(t.name)}</div>
+          <div class="flagged-rank-sub">0/${t.totalPointsAnalyzed} points flagged</div>
+        </div>
+        <div class="flagged-rank-pct clean">${areaLabel}</div>
+      </div>`;
+    }).join('');
+
+    listEl.querySelectorAll('.flagged-rank-item').forEach(item=>{
+      item.addEventListener('click', ()=>{
+        const id = parseInt(item.dataset.id, 10);
+        openTrackDetails(id);
+      });
+    });
+  }
+
+  document.getElementById('summaryHeader').addEventListener('click', (e)=>{
+    if(e.target.id === 'summaryCollapse') return;
+    document.getElementById('summaryPanel').classList.toggle('collapsed');
+  });
+  document.getElementById('summaryCollapse').addEventListener('click', (e)=>{
+    e.stopPropagation();
+    document.getElementById('summaryPanel').classList.toggle('collapsed');
+  });
+
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+
+  dropzone.addEventListener('click', ()=>fileInput.click());
+  fileInput.addEventListener('change', (e)=>{
+    handleFiles(e.target.files);
+    fileInput.value = '';
+  });
+
+  ['dragenter','dragover'].forEach(evt=>{
+    dropzone.addEventListener(evt, (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      dropzone.classList.add('dragover');
+    });
+  });
+  ['dragleave','drop'].forEach(evt=>{
+    dropzone.addEventListener(evt, (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      dropzone.classList.remove('dragover');
+    });
+  });
+  dropzone.addEventListener('drop', (e)=>{
+    if(e.dataTransfer.files && e.dataTransfer.files.length){
+      handleFiles(e.dataTransfer.files);
+    }
+  });
+
+  // Also allow dropping anywhere on the map area
+  const mapEl = document.getElementById('map');
+  ['dragenter','dragover'].forEach(evt=>mapEl.addEventListener(evt, e=>{ e.preventDefault(); }));
+  mapEl.addEventListener('drop', (e)=>{
+    e.preventDefault();
+    if(e.dataTransfer.files && e.dataTransfer.files.length){
+      handleFiles(e.dataTransfer.files);
+    }
+  });
+
+  updateEmptyState();
+  updateSummaryPanel();
+
+  /* ---------------- Theme toggle ---------------- */
+  const themeToggleBtn = document.getElementById('themeToggle');
+  const iconMoon = document.getElementById('iconMoon');
+  const iconSun = document.getElementById('iconSun');
+  let theme = 'dark';
+
+  function applyTheme(){
+    document.documentElement.setAttribute('data-theme', theme);
+    iconMoon.style.display = theme === 'dark' ? 'block' : 'none';
+    iconSun.style.display = theme === 'light' ? 'block' : 'none';
+  }
+  applyTheme();
+
+  themeToggleBtn.addEventListener('click', ()=>{
+    theme = theme === 'dark' ? 'light' : 'dark';
+    applyTheme();
+  });
+})();
+</script>
+</body>
+</html>
